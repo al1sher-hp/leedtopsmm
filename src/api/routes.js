@@ -23,12 +23,21 @@ function buildWhere(query) {
   if (has_phone === 'false') where.phone = null;
 
   if (q) {
-    where[Op.or] = [
-      { channel_title: { [Op.iLike]: `%${q}%` } },
-      { channel_username: { [Op.iLike]: `%${q}%` } },
-      { contact_username: { [Op.iLike]: `%${q}%` } },
-      { description: { [Op.iLike]: `%${q}%` } },
-    ];
+    // Vergul bilan ajratilgan bir nechta so'z kiritilsa, ularning istalgan
+    // biri istalgan maydonda topilgan lead'lar qaytariladi (OR mantiq).
+    const terms = q
+      .split(',')
+      .map((term) => term.trim())
+      .filter(Boolean);
+
+    if (terms.length > 0) {
+      where[Op.or] = terms.flatMap((term) => [
+        { channel_title: { [Op.iLike]: `%${term}%` } },
+        { channel_username: { [Op.iLike]: `%${term}%` } },
+        { contact_username: { [Op.iLike]: `%${term}%` } },
+        { description: { [Op.iLike]: `%${term}%` } },
+      ]);
+    }
   }
 
   return where;

@@ -10,7 +10,7 @@ export default function Filters({ filters, onChange }) {
     <div className="flex flex-col gap-3">
       <input
         type="text"
-        placeholder="Qidirish (nom, username, tavsif)..."
+        placeholder="Qidirish: nom, username, tavsif (bir nechta so'z uchun vergul bilan ajrating)"
         value={filters.q || ''}
         onChange={(e) => set('q', e.target.value)}
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
