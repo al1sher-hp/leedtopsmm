@@ -5,12 +5,19 @@
 // to'liq manzilini bering.
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+// Pipeline (Telegram discovery) faqat doim ishlaydigan hostda (Render/Railway/VPS)
+// ishlaydi — Vercel'da har doim 501 qaytaradi. Shuning uchun faqat pipeline
+// chaqiruvlari (run/status) VITE_PIPELINE_API_URL'ga (masalan Render manziliga)
+// yuboriladi, qolgan hamma narsa (leads/stats/csv) tezroq API_URL'da qoladi.
+// Berilmasa API_URL'ga tushadi (bitta host'da hammasi ishlaydigan holat uchun).
+const PIPELINE_API_URL = import.meta.env.VITE_PIPELINE_API_URL || API_URL;
+
 function cleanParams(params) {
   return Object.fromEntries(Object.entries(params || {}).filter(([, v]) => v !== undefined && v !== null && v !== ''));
 }
 
-async function request(path, options = {}) {
-  const res = await fetch(`${API_URL}${path}`, {
+async function request(path, options = {}, baseUrl = API_URL) {
+  const res = await fetch(`${baseUrl}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
@@ -35,11 +42,11 @@ export function updateLeadStatus(id, status) {
 }
 
 export function runPipeline() {
-  return request('/api/pipeline/run', { method: 'POST' });
+  return request('/api/pipeline/run', { method: 'POST' }, PIPELINE_API_URL);
 }
 
 export function fetchPipelineStatus() {
-  return request('/api/pipeline/status');
+  return request('/api/pipeline/status', {}, PIPELINE_API_URL);
 }
 
 export function exportCsvUrl(params) {
