@@ -14,6 +14,37 @@ function isFloodWaitError(err) {
   );
 }
 
+function randomBetween(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+// Odam xatti-harakatiga o'xshash kutish vaqti: bir xil (tekis taqsimlangan)
+// oraliq o'zi ham "bot" belgisi bo'lishi mumkin — haqiqiy odam ko'pincha tez
+// harakat qiladi, ba'zida o'ylanib to'xtaydi, kamdan-kam chalg'iydi. Uch
+// qatlamli model shuni taqlid qiladi:
+//   ~2%  — "chalg'ish" tanaffusi (1-3 daqiqa)
+//   ~10% — "o'ylanish" pauzasi (8-25 soniya)
+//   ~88% — oddiy kutish (REQUEST_DELAY_MS + qiya taqsimlangan jitter —
+//          ikkita tasodifiy son ko'paytmasi kichik qiymatlarga og'irlik
+//          beradi, shuning uchun ko'pchilik so'rov tez, ozchiligi sekinroq)
+const HUMAN_BREAK_CHANCE = 0.02;
+const HUMAN_BREAK_RANGE_MS = [60_000, 180_000];
+const HUMAN_PAUSE_CHANCE = 0.1;
+const HUMAN_PAUSE_RANGE_MS = [8_000, 25_000];
+
+function humanDelayMs() {
+  const roll = Math.random();
+  if (roll < HUMAN_BREAK_CHANCE) {
+    return randomBetween(...HUMAN_BREAK_RANGE_MS);
+  }
+  if (roll < HUMAN_BREAK_CHANCE + HUMAN_PAUSE_CHANCE) {
+    return randomBetween(...HUMAN_PAUSE_RANGE_MS);
+  }
+  const baseDelay = config.rateLimit.requestDelayMs;
+  const skewedJitter = Math.random() * Math.random() * config.rateLimit.requestDelayJitterMs;
+  return baseDelay + skewedJitter;
+}
+
 // Har bir sessiya o'zining soatlik so'rov byudjeti va delay'ini boshqaradi.
 // Bir nechta userbot akkaunt qo'shish uchun SessionPool'ga yangi StringSession qo'shish kifoya.
 class RateLimitedSession {
@@ -53,9 +84,11 @@ class RateLimitedSession {
   async invoke(request, { retries = 5 } = {}) {
     await this._waitForBudget();
 
-    const baseDelay = config.rateLimit.requestDelayMs;
-    const jitter = Math.floor(Math.random() * config.rateLimit.requestDelayJitterMs);
-    await sleep(baseDelay + jitter);
+    const delay = humanDelayMs();
+    if (delay >= HUMAN_PAUSE_RANGE_MS[0]) {
+      console.log(`[timing:${this.label}] ${Math.round(delay / 1000)}s kutilmoqda (odam-o'xshash tanaffus)...`);
+    }
+    await sleep(delay);
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {

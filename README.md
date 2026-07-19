@@ -86,8 +86,12 @@ Postgres'ga yozadigan to'liq tizim + mobile-first React dashboard.
 
 ## Ban-avoidance
 
-- Har MTProto so'rovi orasida konfiguratsiya qilinadigan delay (`REQUEST_DELAY_MS` +
-  tasodifiy jitter).
+- Har MTProto so'rovi orasida odam xatti-harakatiga o'xshash uch qatlamli kutish
+  ([src/telegram/client.js](src/telegram/client.js)dagi `humanDelayMs()`): ~88% oddiy
+  kutish (`REQUEST_DELAY_MS` + qiya taqsimlangan jitter — tekis emas, kichik
+  qiymatlarga og'irlik beradi), ~10% "o'ylanish" pauzasi (8-25s), ~2% "chalg'ish"
+  tanaffusi (1-3 daqiqa). Bir xil (tekis taqsimlangan) oraliq o'zi ham bot belgisi
+  bo'lishi mumkinligi uchun ataylab shunday qurilgan.
 - `FloodWaitError` avtomatik ushlanadi va ko'rsatilgan soniya kutiladi.
 - Soatlik so'rov limiti (`MAX_REQUESTS_PER_HOUR`) — limitga yetganda navbatdagi so'rov
   soat oxirigacha kutadi.
