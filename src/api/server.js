@@ -1,16 +1,10 @@
-import express from 'express';
-import cors from 'cors';
+import app from './app.js';
 import config from '../config/index.js';
 import sequelize from '../db/index.js';
-import routes from './routes.js';
 
-const app = express();
-
-app.use(cors({ origin: config.api.corsOrigin }));
-app.use(express.json());
-app.use('/api', routes);
-app.get('/health', (req, res) => res.json({ ok: true }));
-
+// Doim ishlaydigan (persistent) entrypoint — Docker/Railway/Render/lokal uchun.
+// Vercel serverless funksiyasi buni ishlatmaydi, o'rniga app.js'ni to'g'ridan-to'g'ri
+// eksport qiladi (qarang: api/[...all].js).
 async function start() {
   try {
     await sequelize.authenticate();
@@ -25,5 +19,3 @@ async function start() {
 }
 
 start();
-
-export default app;

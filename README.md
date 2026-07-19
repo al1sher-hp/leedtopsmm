@@ -120,12 +120,46 @@ Postgres'ga yozadigan to'liq tizim + mobile-first React dashboard.
 
 ## Deploy
 
-Tizim uchta mustaqil qismdan iborat: **Postgres**, **API** (Express, doim ishlaydigan
-process kerak — serverless funksiyaga mos emas) va **web** (static build). Userbot
-pipeline API process ichida `POST /api/pipeline/run` orqali ishga tushadi, shuning uchun
-API doim tirik turadigan (uxlab qolmaydigan) hostda bo'lishi kerak.
+Tizim uchta mustaqil qismdan iborat: **Postgres**, **API** (leads/stats/CRUD — tez,
+holatsiz so'rovlar, serverless'ga ham mos keladi) va **pipeline** (discovery → enrich →
+score → store — ataylab sekin, uzoq davom etadigan, doimiy MTProto ulanish talab
+qiladigan userbot jarayoni — **serverless'ga mos emas**, doim ishlaydigan host kerak).
+`web` dashboard esa oddiy static build.
 
-### 1-variant: Docker Compose (VPS'da o'z-o'zidan hosting)
+### 0-variant: Vercel (dashboard + API bitta loyihada, pipeline'siz)
+
+Bu variant `vercel.json` va `api/[...all].js` orqali tayyor: dashboard static build
+sifatida, `GET/PATCH /api/leads`, `/api/stats`, `/api/leads/export.csv` esa Vercel
+serverless funksiyasi sifatida bitta domenda ishlaydi. **`POST /api/pipeline/run` bu
+yerda ataylab 501 qaytaradi** — Telegram pipeline uzoq va doimiy ulanish talab qilgani
+uchun Vercel funksiyalarining vaqt chegarasiga sig'maydi.
+
+1. Postgres (Neon, Supabase yoki boshqa managed provayder) yarating, `DATABASE_URL`ni oling.
+   Ko'pchilik provayderlarda SSL kerak — shu holda `PGSSL=true` qo'ying (yoki `DATABASE_URL`
+   ichida `?sslmode=require` bo'lsin).
+2. Vercel'da "Import Project" orqali shu repo'ni ulang (root papka o'zgarishsiz qoldiring —
+   `vercel.json` build/output'ni o'zi belgilaydi).
+3. Project Settings → Environment Variables'ga qo'shing:
+   - `DATABASE_URL` (majburiy)
+   - `PGSSL=true` (agar provayder talab qilsa)
+   - `CORS_ORIGIN` — bo'sh qoldirsangiz bo'ladi, chunki dashboard va API bir domenda
+     (dashboard `/api/...`ga **nisbiy** manzil bilan murojaat qiladi — `VITE_API_URL`
+     sozlash shart emas, standart shu holat uchun mo'ljallangan)
+   - `API_ID`, `API_HASH`, `GEMINI_API_KEY` — kerak bo'lsa (API endpoint'lar o'zi
+     Telegram'ga ulanmaydi, lekin `pipeline/status` kabi kodlar import zanjirida
+     qoladi, shuning uchun qo'yib qo'yish zarar qilmaydi)
+4. Deploy'dan keyin `node src/db/migrate.js`ni **lokal** yoki boshqa hostdan
+   `DATABASE_URL`ni shu Postgres'ga ko'rsatib ishga tushiring (Vercel'da bir martalik
+   buyruq ishga tushirish imkoniyati yo'q).
+5. Pipeline'ni esa alohida — lokal mashinada (`npm run pipeline`) yoki 1/2-variantdagi
+   doim ishlaydigan hostda ishga tushiring; u shu bitta Postgres'ga yozadi, dashboard
+   Vercel'da uni darhol ko'rsatadi.
+
+Agar dashboard'ni alohida, API'ni esa Railway/Render'da (pastga qarang) saqlamoqchi
+bo'lsangiz — Vercel loyihasida faqat `web/` papkasini root sifatida ulang va
+`VITE_API_URL`ni API'ning tashqi domeniga o'rnating; `vercel.json`/`api/` kerak bo'lmaydi.
+
+### 1-variant: Docker Compose (VPS'da o'z-o'zidan hosting, pipeline bilan birga)
 
 ```
 cp .env.example .env    # API_ID/API_HASH/SESSION/GEMINI_API_KEY to'ldiring

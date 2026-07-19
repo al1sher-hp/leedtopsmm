@@ -1,4 +1,9 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+// Standart holat — nisbiy "/api/..." (bir domenda joylashgan dashboard + API
+// uchun, masalan bitta Vercel loyihasi). Lokal devda buni Vite proksisi
+// (vite.config.js) localhost:4000'ga yo'naltiradi. Dashboard va API turli
+// domenlarda bo'lsa (masalan Vercel + Railway), VITE_API_URL'ga API'ning
+// to'liq manzilini bering.
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 function cleanParams(params) {
   return Object.fromEntries(Object.entries(params || {}).filter(([, v]) => v !== undefined && v !== null && v !== ''));

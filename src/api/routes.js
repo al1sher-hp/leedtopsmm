@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { Op } from 'sequelize';
 import { Lead } from '../db/models.js';
-import { runPipeline } from '../jobs/runPipeline.js';
 
 const router = Router();
+
+router.get('/health', (req, res) => res.json({ ok: true }));
 
 const SORTABLE_FIELDS = new Set(['gemini_score', 'subs', 'createdAt', 'updatedAt', 'channel_title', 'id']);
 const VALID_STATUSES = ['new', 'contacted', 'replied', 'client', 'rejected'];
@@ -154,6 +155,18 @@ const pipelineState = {
 };
 
 router.post('/pipeline/run', async (req, res) => {
+  // Pipeline uzoq davom etadigan (ataylab rate-limited) va doimiy MTProto ulanish
+  // talab qiladigan jarayon — Vercel'ning qisqa muddatli serverless funksiyalarida
+  // ishlay olmaydi. Buni doim ishlaydigan hostda (Railway/Render/VPS) yoki lokal
+  // `npm run pipeline` orqali ishga tushiring.
+  if (process.env.VERCEL) {
+    return res.status(501).json({
+      error:
+        "Pipeline Vercel serverless funksiyasida ishlamaydi (uzoq davom etadigan, doimiy ulanish talab qiladi). " +
+        "'npm run pipeline'ni doim ishlaydigan hostda (Railway/Render/VPS) yoki lokal ishga tushiring.",
+    });
+  }
+
   if (pipelineState.running) {
     return res.status(409).json({ error: 'Pipeline allaqachon ishlamoqda', state: pipelineState });
   }
@@ -162,6 +175,8 @@ router.post('/pipeline/run', async (req, res) => {
   pipelineState.startedAt = new Date().toISOString();
   pipelineState.finishedAt = null;
   pipelineState.lastError = null;
+
+  const { runPipeline } = await import('../jobs/runPipeline.js');
 
   runPipeline()
     .then((stats) => {
