@@ -1,0 +1,9 @@
+node_modules/
+web/node_modules/
+web/dist/
+.env
+web/.env
+*.session
+*.log
+.DS_Store
+.claude/

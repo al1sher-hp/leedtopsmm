@@ -1,0 +1,9 @@
+node_modules
+web
+.git
+.env
+.env.example
+*.session
+*.log
+.claude
+README.md

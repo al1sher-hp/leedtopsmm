@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: leedtopsmm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      API_ID: ${API_ID}
+      API_HASH: ${API_HASH}
+      SESSION: ${SESSION}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/leedtopsmm
+      MAX_REQUESTS_PER_HOUR: ${MAX_REQUESTS_PER_HOUR:-250}
+      REQUEST_DELAY_MS: ${REQUEST_DELAY_MS:-3000}
+      REQUEST_DELAY_JITTER_MS: ${REQUEST_DELAY_JITTER_MS:-1500}
+      DISCOVERY_DEPTH: ${DISCOVERY_DEPTH:-2}
+      PORT: 4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    ports:
+      - "4000:4000"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000}
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
