@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import StatsHeader from './components/StatsHeader.jsx';
 import Filters from './components/Filters.jsx';
+import PipelineControl from './components/PipelineControl.jsx';
 import LeadCard from './components/LeadCard.jsx';
 import LeadTable from './components/LeadTable.jsx';
 import Pagination from './components/Pagination.jsx';
@@ -9,6 +10,7 @@ import {
   fetchStats,
   updateLeadStatus,
   runPipeline,
+  cancelPipeline,
   fetchPipelineStatus,
   exportCsvUrl,
 } from './lib/api.js';
@@ -26,6 +28,8 @@ const DEFAULT_FILTERS = {
   limit: 20,
 };
 
+const KEYWORDS_STORAGE_KEY = 'leedtopsmm.pipelineKeywords';
+
 export default function App() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [leads, setLeads] = useState([]);
@@ -33,7 +37,14 @@ export default function App() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const [pipelineKeywords, setPipelineKeywords] = useState(
+    () => localStorage.getItem(KEYWORDS_STORAGE_KEY) || ''
+  );
   const [pipelineRunning, setPipelineRunning] = useState(false);
+  const [pipelineLastStats, setPipelineLastStats] = useState(null);
+  const [pipelineLastError, setPipelineLastError] = useState(null);
+  const [pipelineActionError, setPipelineActionError] = useState(null);
 
   const loadLeads = useCallback(async (f) => {
     setLoading(true);
@@ -70,7 +81,11 @@ export default function App() {
 
   useEffect(() => {
     fetchPipelineStatus()
-      .then((res) => setPipelineRunning(res.state.running))
+      .then((res) => {
+        setPipelineRunning(res.state.running);
+        setPipelineLastStats(res.state.lastStats);
+        setPipelineLastError(res.state.lastError);
+      })
       .catch(() => {});
   }, []);
 
@@ -85,41 +100,79 @@ export default function App() {
     }
   };
 
-  const handleRunPipeline = async () => {
-    try {
-      await runPipeline();
-      setPipelineRunning(true);
-      const interval = setInterval(async () => {
+  const handleKeywordsChange = (value) => {
+    setPipelineKeywords(value);
+    localStorage.setItem(KEYWORDS_STORAGE_KEY, value);
+  };
+
+  const pollPipelineStatus = () => {
+    const interval = setInterval(async () => {
+      try {
         const res = await fetchPipelineStatus();
         if (!res.state.running) {
           setPipelineRunning(false);
+          setPipelineLastStats(res.state.lastStats);
+          setPipelineLastError(res.state.lastError);
           clearInterval(interval);
           loadLeads(filters);
           loadStats();
         }
-      }, 4000);
+      } catch (err) {
+        console.error(err);
+      }
+    }, 4000);
+  };
+
+  const handleStartPipeline = async () => {
+    const keywords = pipelineKeywords
+      .split(',')
+      .map((k) => k.trim())
+      .filter(Boolean);
+
+    if (keywords.length === 0) return;
+
+    setPipelineActionError(null);
+    try {
+      await runPipeline(keywords);
+      setPipelineRunning(true);
+      setPipelineLastStats(null);
+      setPipelineLastError(null);
+      pollPipelineStatus();
     } catch (err) {
-      setError(err.message);
+      setPipelineActionError(err.message);
+    }
+  };
+
+  const handleStopPipeline = async () => {
+    setPipelineActionError(null);
+    try {
+      await cancelPipeline();
+    } catch (err) {
+      setPipelineActionError(err.message);
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       <header className="bg-indigo-600 text-white px-4 py-4 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <div className="max-w-5xl mx-auto">
           <h1 className="text-lg font-bold">TopSMM Lead Dashboard</h1>
-          <button
-            onClick={handleRunPipeline}
-            disabled={pipelineRunning}
-            className="text-xs bg-white/15 hover:bg-white/25 rounded-lg px-3 py-1.5 disabled:opacity-50"
-          >
-            {pipelineRunning ? 'Ishlamoqda...' : 'Pipeline ishga tushirish'}
-          </button>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 mt-4 flex flex-col gap-4">
         <StatsHeader stats={stats} />
+
+        <PipelineControl
+          keywords={pipelineKeywords}
+          onKeywordsChange={handleKeywordsChange}
+          running={pipelineRunning}
+          onStart={handleStartPipeline}
+          onStop={handleStopPipeline}
+          lastStats={pipelineLastStats}
+          lastError={pipelineLastError}
+          actionError={pipelineActionError}
+        />
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <Filters filters={filters} onChange={setFilters} />

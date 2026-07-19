@@ -5,6 +5,7 @@ import { runDiscovery } from '../discovery/discovery.js';
 import { enrichCandidate } from '../enrich/enrich.js';
 import { scoreLead } from '../score/gemini.js';
 import { disconnectPool } from '../telegram/client.js';
+import { pipelineCancellation } from './cancellation.js';
 
 async function processCandidate(candidate, stats) {
   try {
@@ -43,17 +44,38 @@ async function processCandidate(candidate, stats) {
   }
 }
 
-/** discovery -> enrich -> score -> store. To'xtab qolsa, qayta ishga tushirish xavfsiz. */
-export async function runPipeline() {
+/**
+ * discovery -> enrich -> score -> store. To'xtab qolsa, qayta ishga tushirish
+ * xavfsiz (idempotent). `keywords` berilmasa, discovery config/seeds.js'dagi
+ * standart ro'yxatga tushadi (npm run pipeline uchun).
+ */
+export async function runPipeline({ keywords } = {}) {
   await sequelize.authenticate();
+  pipelineCancellation.reset();
   console.log('[pipeline] boshlanmoqda...');
 
-  const candidates = await runDiscovery();
+  const stats = { created: 0, updated: 0, skipped: 0, failed: 0, cancelled: false };
+
+  let candidates;
+  try {
+    candidates = await runDiscovery({ keywords });
+  } catch (err) {
+    if (err.isCancellation) {
+      console.log("[pipeline] discovery bosqichida foydalanuvchi tomonidan to'xtatildi");
+      stats.cancelled = true;
+      return stats;
+    }
+    throw err;
+  }
+
   console.log(`[pipeline] ${candidates.length} ta nomzod topildi, boyitish/baholash boshlanmoqda...`);
 
-  const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
-
   for (let i = 0; i < candidates.length; i++) {
+    if (pipelineCancellation.isCancelled) {
+      console.log("[pipeline] foydalanuvchi tomonidan to'xtatildi");
+      stats.cancelled = true;
+      break;
+    }
     console.log(`[pipeline] (${i + 1}/${candidates.length})`);
     await processCandidate(candidates[i], stats);
   }

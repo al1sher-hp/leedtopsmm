@@ -1,9 +1,25 @@
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import config from '../config/index.js';
+import { pipelineCancellation } from '../jobs/cancellation.js';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Uzoq kutishlarni (ba'zan 1-3 daqiqagacha) 1 soniyalik bo'laklarga bo'lib
+// kutadi va har bo'lakdan keyin bekor qilinganini tekshiradi — shu tufayli
+// "to'xtatish" bosilgach, o'rtacha 1 soniya ichida haqiqatan to'xtaydi.
+async function cancellableSleep(ms) {
+  const CHUNK_MS = 1000;
+  let remaining = ms;
+  while (remaining > 0) {
+    pipelineCancellation.throwIfCancelled();
+    const wait = Math.min(CHUNK_MS, remaining);
+    await sleep(wait);
+    remaining -= wait;
+  }
+  pipelineCancellation.throwIfCancelled();
 }
 
 function isFloodWaitError(err) {
@@ -66,6 +82,7 @@ class RateLimitedSession {
   async _waitForBudget() {
     this._resetWindowIfNeeded();
     while (this.requestsThisHour >= config.rateLimit.maxRequestsPerHour) {
+      pipelineCancellation.throwIfCancelled();
       const now = Date.now();
       const msLeft = this.hourWindowStart + 3600_000 - now;
       const waitMs = Math.max(msLeft, 1000);
@@ -74,7 +91,7 @@ class RateLimitedSession {
           waitMs / 1000
         )}s kutilmoqda...`
       );
-      await sleep(Math.min(waitMs, 60_000));
+      await cancellableSleep(Math.min(waitMs, 60_000));
       this._resetWindowIfNeeded();
     }
   }
@@ -82,13 +99,14 @@ class RateLimitedSession {
   // Barcha MTProto so'rovlari shu orqali o'tishi SHART — rate-limit va
   // FloodWait himoyasi markazlashgan.
   async invoke(request, { retries = 5 } = {}) {
+    pipelineCancellation.throwIfCancelled();
     await this._waitForBudget();
 
     const delay = humanDelayMs();
     if (delay >= HUMAN_PAUSE_RANGE_MS[0]) {
       console.log(`[timing:${this.label}] ${Math.round(delay / 1000)}s kutilmoqda (odam-o'xshash tanaffus)...`);
     }
-    await sleep(delay);
+    await cancellableSleep(delay);
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
@@ -98,14 +116,14 @@ class RateLimitedSession {
         if (isFloodWaitError(err)) {
           const waitSeconds = err.seconds || 30;
           console.warn(`[flood-wait:${this.label}] ${waitSeconds}s kutish talab qilindi, kutilmoqda...`);
-          await sleep((waitSeconds + 1) * 1000);
+          await cancellableSleep((waitSeconds + 1) * 1000);
           continue;
         }
         if (attempt < retries) {
           console.warn(
             `[retry:${this.label}] so'rov xatosi: ${err.message}. Qayta urinish ${attempt + 1}/${retries}`
           );
-          await sleep(2000 * (attempt + 1));
+          await cancellableSleep(2000 * (attempt + 1));
           continue;
         }
         throw err;

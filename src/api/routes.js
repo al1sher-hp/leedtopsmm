@@ -161,6 +161,7 @@ const pipelineState = {
   finishedAt: null,
   lastStats: null,
   lastError: null,
+  keywords: null,
 };
 
 router.post('/pipeline/run', async (req, res) => {
@@ -180,14 +181,27 @@ router.post('/pipeline/run', async (req, res) => {
     return res.status(409).json({ error: 'Pipeline allaqachon ishlamoqda', state: pipelineState });
   }
 
+  // Kalit so'zsiz pipeline ishga tushmaydi — behuda (nimani qidirishni
+  // bilmaydigan) ishlashning oldini oladi.
+  const keywords = Array.isArray(req.body?.keywords)
+    ? req.body.keywords.map((k) => String(k).trim()).filter(Boolean)
+    : [];
+
+  if (keywords.length === 0) {
+    return res.status(400).json({
+      error: "Kalit so'zlar kiritilishi shart — kamida bitta so'z bering (masalan \"Toshkent\", \"biznes\").",
+    });
+  }
+
   pipelineState.running = true;
   pipelineState.startedAt = new Date().toISOString();
   pipelineState.finishedAt = null;
   pipelineState.lastError = null;
+  pipelineState.keywords = keywords;
 
   const { runPipeline } = await import('../jobs/runPipeline.js');
 
-  runPipeline()
+  runPipeline({ keywords })
     .then((stats) => {
       pipelineState.lastStats = stats;
     })
@@ -201,6 +215,21 @@ router.post('/pipeline/run', async (req, res) => {
     });
 
   res.status(202).json({ message: 'Pipeline ishga tushirildi', state: pipelineState });
+});
+
+router.post('/pipeline/cancel', async (req, res) => {
+  if (process.env.VERCEL) {
+    return res.status(501).json({ error: "Pipeline Vercel serverless funksiyasida ishlamaydi." });
+  }
+
+  if (!pipelineState.running) {
+    return res.status(409).json({ error: "Hech qanday pipeline hozir ishlamayapti", state: pipelineState });
+  }
+
+  const { pipelineCancellation } = await import('../jobs/cancellation.js');
+  pipelineCancellation.cancel();
+
+  res.status(202).json({ message: "To'xtatish so'rovi yuborildi, bir necha soniyada to'xtaydi", state: pipelineState });
 });
 
 router.get('/pipeline/status', (req, res) => {

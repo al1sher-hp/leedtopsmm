@@ -41,8 +41,16 @@ export function updateLeadStatus(id, status) {
   return request(`/api/leads/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
 }
 
-export function runPipeline() {
-  return request('/api/pipeline/run', { method: 'POST' }, PIPELINE_API_URL);
+export function runPipeline(keywords) {
+  return request(
+    '/api/pipeline/run',
+    { method: 'POST', body: JSON.stringify({ keywords }) },
+    PIPELINE_API_URL
+  );
+}
+
+export function cancelPipeline() {
+  return request('/api/pipeline/cancel', { method: 'POST' }, PIPELINE_API_URL);
 }
 
 export function fetchPipelineStatus() {
@@ -54,4 +62,12 @@ export function exportCsvUrl(params) {
   return `${API_URL}/api/leads/export.csv?${query}`;
 }
 
-export default { fetchLeads, fetchStats, updateLeadStatus, runPipeline, fetchPipelineStatus, exportCsvUrl };
+export default {
+  fetchLeads,
+  fetchStats,
+  updateLeadStatus,
+  runPipeline,
+  cancelPipeline,
+  fetchPipelineStatus,
+  exportCsvUrl,
+};

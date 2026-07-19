@@ -3,6 +3,7 @@ import { getPool } from '../telegram/client.js';
 import { SEARCH_KEYWORDS, CATALOG_CHANNELS } from '../config/seeds.js';
 import config from '../config/index.js';
 import { extractUsernames } from '../extract/username.js';
+import { pipelineCancellation } from '../jobs/cancellation.js';
 
 /**
  * @typedef {Object} Candidate
@@ -52,6 +53,7 @@ export async function searchByKeywords(keywords = SEARCH_KEYWORDS, { limit = 20 
   const candidates = new Map();
 
   for (const q of keywords) {
+    pipelineCancellation.throwIfCancelled();
     console.log(`[discovery:search] "${q}" qidirilmoqda...`);
     try {
       const result = await pool.invoke(new Api.contacts.Search({ q, limit }));
@@ -78,6 +80,7 @@ export async function findSimilarChannels(seedCandidates, { depth = config.disco
   for (let level = 0; level < depth; level++) {
     const nextFrontier = [];
     for (const candidate of frontier) {
+      pipelineCancellation.throwIfCancelled();
       if (!candidate.entity || candidate.entity.className !== 'Channel') continue;
       try {
         console.log(
@@ -111,6 +114,7 @@ export async function discoverFromCatalog(catalogUsernames = CATALOG_CHANNELS, {
   const results = new Map();
 
   for (const username of catalogUsernames) {
+    pipelineCancellation.throwIfCancelled();
     try {
       console.log(`[discovery:catalog] "@${username}" o'qilmoqda...`);
       const resolved = await pool.invoke(new Api.contacts.ResolveUsername({ username }));
@@ -149,9 +153,15 @@ export async function discoverFromCatalog(catalogUsernames = CATALOG_CHANNELS, {
   return Array.from(results.values());
 }
 
-/** Uch usulni birlashtirib, dedup qilingan nomzodlar ro'yxatini qaytaradi. */
-export async function runDiscovery() {
-  const seedResults = await searchByKeywords();
+/**
+ * Uch usulni birlashtirib, dedup qilingan nomzodlar ro'yxatini qaytaradi.
+ * `keywords` berilsa (masalan dashboard'dan), o'sha so'zlar bilan qidiradi;
+ * berilmasa (masalan `npm run pipeline` to'g'ridan-to'g'ri ishga tushirilganda)
+ * config/seeds.js'dagi standart ro'yxatga tushadi.
+ */
+export async function runDiscovery({ keywords } = {}) {
+  const effectiveKeywords = keywords && keywords.length > 0 ? keywords : SEARCH_KEYWORDS;
+  const seedResults = await searchByKeywords(effectiveKeywords);
   console.log(`[discovery] search orqali ${seedResults.length} ta nomzod topildi`);
 
   const similarResults = await findSimilarChannels(seedResults);
