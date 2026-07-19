@@ -1,3 +1,5 @@
+import { SEGMENT_LABELS, CONTACT_TYPE_LABELS, STATUS_LABELS, LANG_LABELS } from '../lib/labels.js';
+
 const SEGMENTS = ['reseller', 'grower', 'other'];
 const CONTACT_TYPES = ['phone', 'username', 'both', 'none'];
 const STATUSES = ['new', 'contacted', 'replied', 'client', 'rejected'];
@@ -25,7 +27,7 @@ export default function Filters({ filters, onChange }) {
           <option value="">Segment: hammasi</option>
           {SEGMENTS.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {SEGMENT_LABELS[s]}
             </option>
           ))}
         </select>
@@ -38,7 +40,7 @@ export default function Filters({ filters, onChange }) {
           <option value="">Kontakt: hammasi</option>
           {CONTACT_TYPES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {CONTACT_TYPE_LABELS[s]}
             </option>
           ))}
         </select>
@@ -48,10 +50,10 @@ export default function Filters({ filters, onChange }) {
           onChange={(e) => set('status', e.target.value)}
           className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
         >
-          <option value="">Status: hammasi</option>
+          <option value="">Holat: hammasi</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {STATUS_LABELS[s]}
             </option>
           ))}
         </select>
@@ -64,7 +66,7 @@ export default function Filters({ filters, onChange }) {
           <option value="">Til: hammasi</option>
           {LANGS.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {LANG_LABELS[s]}
             </option>
           ))}
         </select>

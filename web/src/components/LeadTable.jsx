@@ -14,7 +14,7 @@ export default function LeadTable({ leads, onStatusChange }) {
             <th className="px-4 py-3">Segment</th>
             <th className="px-4 py-3">Ball</th>
             <th className="px-4 py-3">Kontakt</th>
-            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Holat</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">

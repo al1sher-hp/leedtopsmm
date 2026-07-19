@@ -1,3 +1,5 @@
+import { STATUS_LABELS } from '../lib/labels.js';
+
 const STATUSES = ['new', 'contacted', 'replied', 'client', 'rejected'];
 
 export default function StatusDropdown({ status, onChange }) {
@@ -9,7 +11,7 @@ export default function StatusDropdown({ status, onChange }) {
     >
       {STATUSES.map((s) => (
         <option key={s} value={s}>
-          {s}
+          {STATUS_LABELS[s]}
         </option>
       ))}
     </select>

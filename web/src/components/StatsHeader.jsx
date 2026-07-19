@@ -1,3 +1,5 @@
+import { SEGMENT_LABELS } from '../lib/labels.js';
+
 const SEGMENT_COLORS = {
   reseller: '#10b981',
   grower: '#3b82f6',
@@ -77,7 +79,7 @@ export default function StatsHeader({ stats }) {
                 style={{ backgroundColor: SEGMENT_COLORS[key] || '#9ca3af' }}
               />
               <span className="text-gray-600">
-                {key}: {value}
+                {SEGMENT_LABELS[key] || key}: {value}
               </span>
             </div>
           ))}
