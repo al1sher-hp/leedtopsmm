@@ -67,4 +67,11 @@ export function extractContactUsername(text, selfUsername = null) {
   return fallback ? fallback.handle : null;
 }
 
-export default { extractUsernames, extractContactUsername };
+// Telegram bot username'lari BotFather tomonidan majburiy "bot"/"_bot" bilan
+// tugashi talab qilinadi — shuning uchun API chaqirmasdan ham ishonchli belgi.
+export function isLikelyBotUsername(username) {
+  if (!username) return false;
+  return /bot$/i.test(username);
+}
+
+export default { extractUsernames, extractContactUsername, isLikelyBotUsername };

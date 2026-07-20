@@ -27,7 +27,7 @@ export default function LeadCard({ lead, onStatusChange }) {
 
       <div className="flex flex-wrap gap-1.5 items-center">
         <SegmentBadge segment={lead.segment} />
-        <ContactBadge contactType={lead.contact_type} />
+        <ContactBadge contactType={lead.contact_type} isBot={lead.contact_is_bot} />
         {lead.subs != null && (
           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
             {lead.subs.toLocaleString()} obunachi

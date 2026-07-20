@@ -1,7 +1,7 @@
 import { Api } from 'telegram';
 import { getPool } from '../telegram/client.js';
 import { extractFirstPhone } from '../extract/phone.js';
-import { extractContactUsername } from '../extract/username.js';
+import { extractContactUsername, isLikelyBotUsername } from '../extract/username.js';
 
 function toInputChannel(chat) {
   return new Api.InputChannel({ channelId: chat.id, accessHash: chat.accessHash });
@@ -108,6 +108,9 @@ export async function enrichCandidate(candidate, { recentLimit = 20 } = {}) {
 
   const phone = extractFirstPhone(combinedText);
   let contactUsername = extractContactUsername(combinedText, candidate.username);
+  // Matndan chiqarilgan username haqiqatan bot ekanligini API'siz bilib
+  // bo'lmaydi — shuning uchun nom bo'yicha heuristika ishlatiladi (pastga qarang).
+  let contactIsBot = contactUsername ? isLikelyBotUsername(contactUsername) : false;
 
   // Matnda kontakt topilmasa va bu guruh/linked-discussion bo'lsa, admin
   // username'laridan birinchisini olamiz.
@@ -115,6 +118,9 @@ export async function enrichCandidate(candidate, { recentLimit = 20 } = {}) {
     const admins = await getAdminUsernames(pool, inputChannel);
     if (admins.length > 0) {
       contactUsername = admins[0];
+      // getAdminUsernames haqiqiy Telegram .bot flagi bo'yicha botlarni
+      // allaqachon chiqarib tashlagan.
+      contactIsBot = false;
     }
   }
 
@@ -130,7 +136,9 @@ export async function enrichCandidate(candidate, { recentLimit = 20 } = {}) {
     description: about || null,
     phone,
     contact_username: contactUsername,
+    contact_is_bot: contactIsBot,
     contact_type,
+    matched_keyword: candidate.matched_keyword || null,
     source: candidate.source,
   };
 }

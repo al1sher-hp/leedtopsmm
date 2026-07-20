@@ -56,6 +56,15 @@ Lead.init(
       allowNull: false,
       defaultValue: 'none',
     },
+    contact_is_bot: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    matched_keyword: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     source: {
       type: DataTypes.STRING,
       allowNull: true,

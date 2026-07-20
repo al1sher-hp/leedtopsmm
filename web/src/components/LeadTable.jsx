@@ -41,7 +41,7 @@ export default function LeadTable({ leads, onStatusChange }) {
               <td className="px-4 py-3 font-semibold text-gray-900">{lead.gemini_score ?? '-'}</td>
               <td className="px-4 py-3">
                 <div className="flex flex-col gap-1">
-                  <ContactBadge contactType={lead.contact_type} />
+                  <ContactBadge contactType={lead.contact_type} isBot={lead.contact_is_bot} />
                   {lead.phone && <span className="text-xs text-gray-600">{lead.phone}</span>}
                   {lead.contact_username && <span className="text-xs text-gray-600">@{lead.contact_username}</span>}
                 </div>

@@ -11,16 +11,37 @@ const VALID_STATUSES = ['new', 'contacted', 'replied', 'client', 'rejected'];
 
 function buildWhere(query) {
   const where = {};
-  const { segment, contact_type, has_phone, status, category, lang, q } = query;
+  const {
+    segment, contact_type, has_phone, status, category, lang, q,
+    hide_bots, date_from, date_to, matched_keyword,
+  } = query;
 
   if (segment) where.segment = segment;
-  if (contact_type) where.contact_type = contact_type;
   if (status) where.status = status;
   if (category) where.category = category;
   if (lang) where.lang = lang;
 
+  // 'phone'/'username' tanlansa, 'both' (ikkalasi ham bor) lead'lar ham
+  // qamrab olinishi kerak — faqat aniq shu turdagilargagina cheklamaymiz.
+  if (contact_type === 'phone') where.contact_type = { [Op.in]: ['phone', 'both'] };
+  else if (contact_type === 'username') where.contact_type = { [Op.in]: ['username', 'both'] };
+  else if (contact_type) where.contact_type = contact_type;
+
   if (has_phone === 'true') where.phone = { [Op.ne]: null };
   if (has_phone === 'false') where.phone = null;
+
+  if (hide_bots === 'true') where.contact_is_bot = false;
+
+  if (matched_keyword) {
+    const keywords = matched_keyword.split(',').map((k) => k.trim()).filter(Boolean);
+    if (keywords.length > 0) where.matched_keyword = { [Op.in]: keywords };
+  }
+
+  if (date_from || date_to) {
+    where.createdAt = {};
+    if (date_from) where.createdAt[Op.gte] = new Date(date_from);
+    if (date_to) where.createdAt[Op.lte] = new Date(date_to);
+  }
 
   if (q) {
     // Vergul bilan ajratilgan bir nechta so'z kiritilsa, ularning istalgan
@@ -96,6 +117,7 @@ router.get('/stats', async (req, res) => {
     const total = await Lead.count();
     const withPhone = await Lead.count({ where: { phone: { [Op.ne]: null } } });
     const withUsername = await Lead.count({ where: { contact_username: { [Op.ne]: null } } });
+    const withBotContact = await Lead.count({ where: { contact_is_bot: true } });
 
     const segmentRows = await Lead.findAll({
       attributes: ['segment', [Lead.sequelize.fn('COUNT', Lead.sequelize.col('id')), 'count']],
@@ -111,9 +133,24 @@ router.get('/stats', async (req, res) => {
     const bySegment = Object.fromEntries(segmentRows.map((r) => [r.segment || 'unscored', parseInt(r.count, 10)]));
     const byStatus = Object.fromEntries(statusRows.map((r) => [r.status, parseInt(r.count, 10)]));
 
-    res.json({ total, withPhone, withUsername, bySegment, byStatus });
+    res.json({ total, withPhone, withUsername, withBotContact, bySegment, byStatus });
   } catch (err) {
     console.error('[api] GET /stats xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
+router.get('/leads/keywords', async (req, res) => {
+  try {
+    const rows = await Lead.findAll({
+      attributes: [[Lead.sequelize.fn('DISTINCT', Lead.sequelize.col('matched_keyword')), 'matched_keyword']],
+      where: { matched_keyword: { [Op.ne]: null } },
+      order: [['matched_keyword', 'ASC']],
+      raw: true,
+    });
+    res.json({ data: rows.map((r) => r.matched_keyword).filter(Boolean) });
+  } catch (err) {
+    console.error('[api] GET /leads/keywords xato:', err);
     res.status(500).json({ error: 'Server xatosi' });
   }
 });
@@ -134,9 +171,9 @@ router.get('/leads/export.csv', async (req, res) => {
     const leads = await Lead.findAll({ where, order });
 
     const columns = [
-      'id', 'channel_title', 'channel_username', 'channel_id', 'type', 'subs',
-      'category', 'lang', 'phone', 'contact_username', 'contact_type', 'source',
-      'gemini_score', 'segment', 'score_reason', 'status', 'createdAt',
+      'channel_title', 'channel_username', 'phone', 'contact_username',
+      'contact_type', 'contact_is_bot', 'category', 'lang', 'matched_keyword',
+      'status', 'createdAt',
     ];
 
     const headerLine = columns.join(',');
@@ -236,4 +273,5 @@ router.get('/pipeline/status', (req, res) => {
   res.json({ state: pipelineState });
 });
 
+export { buildWhere, buildOrder };
 export default router;

@@ -60,7 +60,12 @@ export async function searchByKeywords(keywords = SEARCH_KEYWORDS, { limit = 20 
       const chats = result.chats || [];
       for (const chat of chats) {
         const candidate = chatToCandidate(chat, 'search');
-        if (candidate) candidates.set(candidate.channel_id, candidate);
+        if (!candidate) continue;
+        // Bir kanal bir nechta kalit so'z bo'yicha topilishi mumkin — birinchi
+        // topilgan kalit so'zni saqlaymiz, keyingilari ustidan yozmaymiz.
+        if (candidates.has(candidate.channel_id)) continue;
+        candidate.matched_keyword = q;
+        candidates.set(candidate.channel_id, candidate);
       }
     } catch (err) {
       console.warn(`[discovery:search] "${q}" uchun xato: ${err.message}`);
@@ -94,6 +99,9 @@ export async function findSimilarChannels(seedCandidates, { depth = config.disco
           const c = chatToCandidate(chat, 'similar');
           if (!c || visited.has(c.channel_id)) continue;
           visited.add(c.channel_id);
+          // Topilgan manba kanalning kalit so'zini meros qilib olamiz — shu
+          // orqali "o'xshash" natijalar ham keyword filtriga tushadi.
+          c.matched_keyword = candidate.matched_keyword || null;
           results.set(c.channel_id, c);
           nextFrontier.push(c);
         }

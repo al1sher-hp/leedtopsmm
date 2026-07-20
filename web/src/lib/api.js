@@ -37,6 +37,10 @@ export function fetchStats() {
   return request('/api/stats');
 }
 
+export function fetchKeywords() {
+  return request('/api/leads/keywords');
+}
+
 export function updateLeadStatus(id, status) {
   return request(`/api/leads/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
 }
@@ -65,6 +69,7 @@ export function exportCsvUrl(params) {
 export default {
   fetchLeads,
   fetchStats,
+  fetchKeywords,
   updateLeadStatus,
   runPipeline,
   cancelPipeline,

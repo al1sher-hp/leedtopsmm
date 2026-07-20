@@ -54,7 +54,7 @@ export default function StatsHeader({ stats }) {
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-      <div className="grid grid-cols-3 gap-2 text-center mb-4">
+      <div className="grid grid-cols-4 gap-2 text-center mb-4">
         <div>
           <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
           <div className="text-xs text-gray-500">jami lead</div>
@@ -66,6 +66,10 @@ export default function StatsHeader({ stats }) {
         <div>
           <div className="text-2xl font-bold text-sky-600">{stats.withUsername}</div>
           <div className="text-xs text-gray-500">username'li</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-orange-600">{stats.withBotContact ?? 0}</div>
+          <div className="text-xs text-gray-500">bot kontakt</div>
         </div>
       </div>
 

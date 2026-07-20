@@ -8,6 +8,7 @@ import Pagination from './components/Pagination.jsx';
 import {
   fetchLeads,
   fetchStats,
+  fetchKeywords,
   updateLeadStatus,
   runPipeline,
   cancelPipeline,
@@ -23,6 +24,10 @@ const DEFAULT_FILTERS = {
   lang: '',
   q: '',
   has_phone: '',
+  hide_bots: '',
+  date_from: '',
+  date_to: '',
+  matched_keyword: '',
   sort: 'gemini_score desc',
   page: 1,
   limit: 20,
@@ -37,6 +42,7 @@ export default function App() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [keywords, setKeywords] = useState([]);
 
   const [pipelineKeywords, setPipelineKeywords] = useState(
     () => localStorage.getItem(KEYWORDS_STORAGE_KEY) || ''
@@ -78,6 +84,12 @@ export default function App() {
   useEffect(() => {
     loadStats();
   }, [loadStats]);
+
+  useEffect(() => {
+    fetchKeywords()
+      .then((res) => setKeywords(res.data))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchPipelineStatus()
@@ -175,7 +187,7 @@ export default function App() {
         />
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <Filters filters={filters} onChange={setFilters} />
+          <Filters filters={filters} onChange={setFilters} keywords={keywords} />
         </div>
 
         <div className="flex items-center justify-between">

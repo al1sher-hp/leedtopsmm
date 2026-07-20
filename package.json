@@ -17,6 +17,7 @@
     "web": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
     "dev": "node scripts/dev.js",
+    "test": "vitest run",
     "postinstall": "npm --prefix web install"
   },
   "dependencies": {
@@ -31,6 +32,7 @@
     "telegram": "^2.22.2"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "vitest": "^2.1.9"
   }
 }
