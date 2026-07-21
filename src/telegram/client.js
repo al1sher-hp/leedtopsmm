@@ -10,16 +10,19 @@ function sleep(ms) {
 // Uzoq kutishlarni (ba'zan 1-3 daqiqagacha) 1 soniyalik bo'laklarga bo'lib
 // kutadi va har bo'lakdan keyin bekor qilinganini tekshiradi — shu tufayli
 // "to'xtatish" bosilgach, o'rtacha 1 soniya ichida haqiqatan to'xtaydi.
-async function cancellableSleep(ms) {
+// `token` — qaysi bekor qilish tokeni tekshirilishi (standart: pipeline).
+// Bir nechta mustaqil uzoq job (masalan kanal skanerlash) o'z tokenini
+// uzatib, bir-birini to'xtatib qo'ymasdan shu bir xil mexanizmdan foydalanadi.
+async function cancellableSleep(ms, token = pipelineCancellation) {
   const CHUNK_MS = 1000;
   let remaining = ms;
   while (remaining > 0) {
-    pipelineCancellation.throwIfCancelled();
+    token.throwIfCancelled();
     const wait = Math.min(CHUNK_MS, remaining);
     await sleep(wait);
     remaining -= wait;
   }
-  pipelineCancellation.throwIfCancelled();
+  token.throwIfCancelled();
 }
 
 function isFloodWaitError(err) {
@@ -96,13 +99,13 @@ class RateLimitedSession {
     }
   }
 
-  async _waitForBudget() {
+  async _waitForBudget(token) {
     this._resetWindowIfNeeded();
     while (
       this.requestsThisHour >= config.rateLimit.maxRequestsPerHour ||
       this.requestsToday >= config.rateLimit.maxRequestsPerDay
     ) {
-      pipelineCancellation.throwIfCancelled();
+      token.throwIfCancelled();
       const now = Date.now();
       const hourlyExceeded = this.requestsThisHour >= config.rateLimit.maxRequestsPerHour;
       const msLeft = hourlyExceeded
@@ -114,22 +117,24 @@ class RateLimitedSession {
           hourlyExceeded ? config.rateLimit.maxRequestsPerHour : config.rateLimit.maxRequestsPerDay
         }) tugadi, ${Math.ceil(waitMs / 1000)}s kutilmoqda...`
       );
-      await cancellableSleep(Math.min(waitMs, 60_000));
+      await cancellableSleep(Math.min(waitMs, 60_000), token);
       this._resetWindowIfNeeded();
     }
   }
 
   // Barcha MTProto so'rovlari shu orqali o'tishi SHART — rate-limit va
-  // FloodWait himoyasi markazlashgan.
-  async invoke(request, { retries = 5 } = {}) {
-    pipelineCancellation.throwIfCancelled();
-    await this._waitForBudget();
+  // FloodWait himoyasi markazlashgan. `cancellationToken` chaqiruvchi job'ga
+  // mos bekor qilish tokenini uzatadi (standart: pipeline).
+  async invoke(request, { retries = 5, cancellationToken = pipelineCancellation } = {}) {
+    const token = cancellationToken;
+    token.throwIfCancelled();
+    await this._waitForBudget(token);
 
     const delay = humanDelayMs();
     if (delay >= HUMAN_PAUSE_RANGE_MS[0]) {
       console.log(`[timing:${this.label}] ${Math.round(delay / 1000)}s kutilmoqda (odam-o'xshash tanaffus)...`);
     }
-    await cancellableSleep(delay);
+    await cancellableSleep(delay, token);
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
@@ -140,7 +145,7 @@ class RateLimitedSession {
         if (isFloodWaitError(err)) {
           const waitSeconds = err.seconds || 30;
           console.warn(`[flood-wait:${this.label}] ${waitSeconds}s kutish talab qilindi, kutilmoqda...`);
-          await cancellableSleep((waitSeconds + 1) * 1000);
+          await cancellableSleep((waitSeconds + 1) * 1000, token);
           continue;
         }
         if (attempt < retries) {
@@ -150,7 +155,7 @@ class RateLimitedSession {
               delay / 1000
             )}s kutish)`
           );
-          await cancellableSleep(delay);
+          await cancellableSleep(delay, token);
           continue;
         }
         throw err;

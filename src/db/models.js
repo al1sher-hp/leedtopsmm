@@ -150,4 +150,68 @@ BlacklistEntry.init(
   }
 );
 
-export default { Lead, BlacklistEntry };
+export class ScanResult extends Model {}
+
+ScanResult.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    source_channel_id: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    source_username: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    source_title: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    source_type: {
+      type: DataTypes.ENUM('channel', 'group'),
+      allowNull: false,
+    },
+    contact_type: {
+      type: DataTypes.ENUM('phone', 'username'),
+      allowNull: false,
+    },
+    contact_value: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    is_bot: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    message_date: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    message_excerpt: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    matched_keyword: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    match_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'ScanResult',
+    tableName: 'scan_results',
+    indexes: [{ unique: true, fields: ['source_channel_id', 'contact_type', 'contact_value'] }],
+  }
+);
+
+export default { Lead, BlacklistEntry, ScanResult };

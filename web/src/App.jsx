@@ -6,6 +6,7 @@ import LeadCard from './components/LeadCard.jsx';
 import LeadTable from './components/LeadTable.jsx';
 import Pagination from './components/Pagination.jsx';
 import BlacklistPage from './components/BlacklistPage.jsx';
+import ChannelScanPage from './components/ChannelScanPage.jsx';
 import {
   fetchLeads,
   fetchStats,
@@ -179,6 +180,12 @@ export default function App() {
               Lead'lar
             </button>
             <button
+              onClick={() => setView('scan')}
+              className={`text-sm px-3 py-1 rounded-md ${view === 'scan' ? 'bg-white text-indigo-700' : 'text-indigo-100'}`}
+            >
+              Kanal qidiruv
+            </button>
+            <button
               onClick={() => setView('blacklist')}
               className={`text-sm px-3 py-1 rounded-md ${view === 'blacklist' ? 'bg-white text-indigo-700' : 'text-indigo-100'}`}
             >
@@ -191,6 +198,8 @@ export default function App() {
       <main className="max-w-5xl mx-auto px-4 mt-4 flex flex-col gap-4">
         {view === 'blacklist' ? (
           <BlacklistPage />
+        ) : view === 'scan' ? (
+          <ChannelScanPage />
         ) : (
           <>
             <StatsHeader stats={stats} />

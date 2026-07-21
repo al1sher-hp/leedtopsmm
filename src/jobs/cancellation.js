@@ -3,7 +3,7 @@
 // kichik bo'laklarga bo'lib tekshiriladi (client.js'dagi cancellableSleep),
 // shunda "to'xtatish" bosilgach bir necha soniya ichida real to'xtaydi.
 
-class CancellationToken {
+export class CancellationToken {
   constructor() {
     this._cancelled = false;
   }

@@ -93,6 +93,35 @@ export function requestBlacklistRemoval(targetId) {
   return request(`/api/blacklist/${encodeURIComponent(targetId)}/remove-request`, { method: 'POST' }, PIPELINE_API_URL);
 }
 
+// Skanerlash ham getPool() (jonli Telegram ulanishi) talab qiladi, shuning
+// uchun run/cancel/status pipeline bilan bir xil doim-ishlaydigan hostga
+// yuboriladi; natijalarni o'qish/eksport DB'dan bo'lgani uchun tez API host'ida.
+export function runChannelScan({ identifier, dateFrom, dateTo, keywords }) {
+  return request(
+    '/api/scan/run',
+    { method: 'POST', body: JSON.stringify({ identifier, dateFrom, dateTo, keywords }) },
+    PIPELINE_API_URL
+  );
+}
+
+export function cancelChannelScan() {
+  return request('/api/scan/cancel', { method: 'POST' }, PIPELINE_API_URL);
+}
+
+export function fetchChannelScanStatus() {
+  return request('/api/scan/status', {}, PIPELINE_API_URL);
+}
+
+export function fetchScanResults(params) {
+  const query = new URLSearchParams(cleanParams(params)).toString();
+  return request(`/api/scan?${query}`);
+}
+
+export function exportScanCsvUrl(params) {
+  const query = new URLSearchParams(cleanParams(params)).toString();
+  return `${API_URL}/api/scan/export.csv?${query}`;
+}
+
 export default {
   fetchLeads,
   fetchStats,
@@ -106,4 +135,9 @@ export default {
   requestBlacklist,
   verifyBlacklist,
   requestBlacklistRemoval,
+  runChannelScan,
+  cancelChannelScan,
+  fetchChannelScanStatus,
+  fetchScanResults,
+  exportScanCsvUrl,
 };
