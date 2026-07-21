@@ -254,9 +254,12 @@ export default function LeadsPage() {
   });
 
   return (
-    <div className="flex flex-col lg:flex-row lg:items-start gap-4">
-      <div className="flex-1 min-w-0">
-      <div className="max-w-4xl mx-auto flex flex-col gap-4">
+    // 1fr/kontent/1fr — kontent HAR DOIM sahifa markazida qat'iy joylashadi
+    // (sidebar borligi/yo'qligiga bog'liq emas), sidebar esa o'ng tomondagi
+    // bo'sh joyda, kontentga ta'sir qilmasdan.
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(0,64rem)_1fr] gap-4">
+      <div className="hidden lg:block" aria-hidden="true" />
+      <div className="min-w-0 flex flex-col gap-4">
         <StatsHeader stats={stats} />
 
         <PipelineControl
@@ -337,7 +340,6 @@ export default function LeadsPage() {
         {!showingRun && (
           <Pagination pagination={pagination} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         )}
-      </div>
       </div>
 
       <FolderSidebar

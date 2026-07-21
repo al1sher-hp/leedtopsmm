@@ -34,7 +34,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 mt-4 flex flex-col gap-4">
+      <main className="max-w-[1800px] mx-auto px-4 mt-4 flex flex-col gap-4">
         {view === 'blacklist' ? <BlacklistPage /> : view === 'scan' ? <ChannelScanPage /> : <LeadsPage />}
       </main>
     </div>
