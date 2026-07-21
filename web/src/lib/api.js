@@ -66,6 +66,24 @@ export function exportCsvUrl(params) {
   return `${API_URL}/api/leads/export.csv?${query}`;
 }
 
+// Har bir pipeline yugurishi o'z "papkasida" — DB'dan o'qilgani uchun tez
+// API host'ida (Telegram ulanishi shart emas).
+export function fetchPipelineRuns() {
+  return request('/api/pipeline/runs');
+}
+
+export function fetchPipelineRunLeads(id) {
+  return request(`/api/pipeline/runs/${id}`);
+}
+
+export function deletePipelineRun(id) {
+  return request(`/api/pipeline/runs/${id}`, { method: 'DELETE' });
+}
+
+export function exportPipelineRunCsvUrl(id) {
+  return `${API_URL}/api/pipeline/runs/${id}/export.csv`;
+}
+
 // Ro'yxatni o'qish DB'dan bo'lgani uchun tez API host'ida qoladi, lekin
 // so'rov/tasdiqlash egalikni Telegram orqali tekshirgani uchun (getPool())
 // pipeline bilan bir xil doim-ishlaydigan hostga yuboriladi.
@@ -139,6 +157,10 @@ export default {
   cancelPipeline,
   fetchPipelineStatus,
   exportCsvUrl,
+  fetchPipelineRuns,
+  fetchPipelineRunLeads,
+  deletePipelineRun,
+  exportPipelineRunCsvUrl,
   fetchBlacklist,
   requestBlacklist,
   verifyBlacklist,

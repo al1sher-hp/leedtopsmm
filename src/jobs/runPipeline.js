@@ -1,13 +1,23 @@
 import { pathToFileURL } from 'url';
 import sequelize from '../db/index.js';
-import { Lead } from '../db/models.js';
+import { Lead, PipelineRun, PipelineRunLead } from '../db/models.js';
 import { runDiscovery } from '../discovery/discovery.js';
 import { enrichCandidate } from '../enrich/enrich.js';
 import { scoreLead } from '../score/gemini.js';
 import { disconnectPool } from '../telegram/client.js';
 import { pipelineCancellation } from './cancellation.js';
 
-async function processCandidate(candidate, stats) {
+function runCounts(stats) {
+  return {
+    created_count: stats.created,
+    updated_count: stats.updated,
+    skipped_count: stats.skipped,
+    failed_count: stats.failed,
+    blacklisted_count: stats.blacklisted,
+  };
+}
+
+async function processCandidate(candidate, stats, runId) {
   try {
     const existing = await Lead.findOne({ where: { channel_id: candidate.channel_id } });
 
@@ -38,13 +48,25 @@ async function processCandidate(candidate, stats) {
     const { contact_confidence, ...scoreFields } = scored;
     const record = { ...enriched, ...scoreFields };
 
+    let lead;
+    let action;
     if (existing) {
       await existing.update(record);
+      lead = existing;
+      action = 'updated';
       stats.updated += 1;
     } else {
-      await Lead.create(record);
+      lead = await Lead.create(record);
+      action = 'created';
       stats.created += 1;
     }
+
+    // Lead — mutabil yagona yozuv, shuning uchun (ScanResult'dan farqli)
+    // to'g'ridan-to'g'ri emas, shu bog'lovchi jadval orqali "qaysi
+    // yugurish(lar) uni yaratdi/yangiladi" qayd etiladi — bitta lead bir
+    // necha pipeline yugurishining "papkasi"ga tegishli bo'lishi mumkin.
+    await PipelineRunLead.create({ pipeline_run_id: runId, lead_id: lead.id, action });
+
     console.log(
       `[pipeline] saqlandi: ${candidate.title} | segment=${record.segment} score=${record.gemini_score} contact_type=${record.contact_type}`
     );
@@ -66,32 +88,44 @@ export async function runPipeline({ keywords } = {}) {
 
   const stats = { created: 0, updated: 0, skipped: 0, failed: 0, blacklisted: 0, cancelled: false };
 
-  let candidates;
+  const run = await PipelineRun.create({
+    keywords: keywords && keywords.length > 0 ? keywords.join(', ') : null,
+    status: 'running',
+  });
+
   try {
-    candidates = await runDiscovery({ keywords });
-  } catch (err) {
-    if (err.isCancellation) {
-      console.log("[pipeline] discovery bosqichida foydalanuvchi tomonidan to'xtatildi");
-      stats.cancelled = true;
-      return stats;
+    let candidates;
+    try {
+      candidates = await runDiscovery({ keywords });
+    } catch (err) {
+      if (err.isCancellation) {
+        console.log("[pipeline] discovery bosqichida foydalanuvchi tomonidan to'xtatildi");
+        stats.cancelled = true;
+        await run.update({ status: 'cancelled', ...runCounts(stats) });
+        return { ...stats, runId: run.id };
+      }
+      throw err;
     }
+
+    console.log(`[pipeline] ${candidates.length} ta nomzod topildi, boyitish/baholash boshlanmoqda...`);
+
+    for (let i = 0; i < candidates.length; i++) {
+      if (pipelineCancellation.isCancelled) {
+        console.log("[pipeline] foydalanuvchi tomonidan to'xtatildi");
+        stats.cancelled = true;
+        break;
+      }
+      console.log(`[pipeline] (${i + 1}/${candidates.length})`);
+      await processCandidate(candidates[i], stats, run.id);
+    }
+
+    console.log('[pipeline] tugadi:', stats);
+    await run.update({ status: stats.cancelled ? 'cancelled' : 'completed', ...runCounts(stats) });
+    return { ...stats, runId: run.id };
+  } catch (err) {
+    await run.update({ status: 'failed', error_message: err.message, ...runCounts(stats) });
     throw err;
   }
-
-  console.log(`[pipeline] ${candidates.length} ta nomzod topildi, boyitish/baholash boshlanmoqda...`);
-
-  for (let i = 0; i < candidates.length; i++) {
-    if (pipelineCancellation.isCancelled) {
-      console.log("[pipeline] foydalanuvchi tomonidan to'xtatildi");
-      stats.cancelled = true;
-      break;
-    }
-    console.log(`[pipeline] (${i + 1}/${candidates.length})`);
-    await processCandidate(candidates[i], stats);
-  }
-
-  console.log('[pipeline] tugadi:', stats);
-  return stats;
 }
 
 async function main() {

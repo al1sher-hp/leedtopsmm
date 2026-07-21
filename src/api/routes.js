@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { Op } from 'sequelize';
-import { Lead } from '../db/models.js';
+import { Lead, PipelineRun, PipelineRunLead } from '../db/models.js';
 
 const router = Router();
 
@@ -164,28 +164,96 @@ function toCsvValue(value) {
   return str;
 }
 
+const LEAD_CSV_COLUMNS = [
+  'channel_title', 'channel_username', 'phone', 'contact_username',
+  'contact_type', 'contact_is_bot', 'category', 'lang', 'matched_keyword',
+  'status', 'createdAt',
+];
+
+function leadsToCsv(leads) {
+  const headerLine = LEAD_CSV_COLUMNS.join(',');
+  const lines = leads.map((lead) => LEAD_CSV_COLUMNS.map((col) => toCsvValue(lead[col])).join(','));
+  // BOM — Excel'da UZ/RU harflar to'g'ri ko'rinishi uchun
+  return '﻿' + [headerLine, ...lines].join('\n');
+}
+
 router.get('/leads/export.csv', async (req, res) => {
   try {
     const where = buildWhere(req.query);
     const order = buildOrder(req.query.sort);
     const leads = await Lead.findAll({ where, order });
 
-    const columns = [
-      'channel_title', 'channel_username', 'phone', 'contact_username',
-      'contact_type', 'contact_is_bot', 'category', 'lang', 'matched_keyword',
-      'status', 'createdAt',
-    ];
-
-    const headerLine = columns.join(',');
-    const lines = leads.map((lead) => columns.map((col) => toCsvValue(lead[col])).join(','));
-    const csv = [headerLine, ...lines].join('\n');
-
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="leads.csv"');
-    // BOM — Excel'da UZ/RU harflar to'g'ri ko'rinishi uchun
-    res.send('﻿' + csv);
+    res.send(leadsToCsv(leads));
   } catch (err) {
     console.error('[api] GET /leads/export.csv xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
+// Har bir pipeline yugurishi — Kanal-qidiruvdagi skanerlash sessiyasi bilan
+// bir xil "papka" mantig'i, lekin Lead mutabil bo'lgani uchun
+// PipelineRunLead orqali ko'p-ko'pga bog'langan.
+router.get('/pipeline/runs', async (req, res) => {
+  try {
+    const runs = await PipelineRun.findAll({ order: [['createdAt', 'DESC']] });
+    res.json({ data: runs });
+  } catch (err) {
+    console.error('[api] GET /pipeline/runs xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
+async function leadsForRun(runId) {
+  const links = await PipelineRunLead.findAll({ where: { pipeline_run_id: runId } });
+  if (links.length === 0) return [];
+  const leadIds = links.map((l) => l.lead_id);
+  return Lead.findAll({ where: { id: { [Op.in]: leadIds } }, order: [['gemini_score', 'DESC']] });
+}
+
+router.get('/pipeline/runs/:id', async (req, res) => {
+  try {
+    const run = await PipelineRun.findByPk(req.params.id);
+    if (!run) return res.status(404).json({ error: 'Yugurish topilmadi' });
+
+    const leads = await leadsForRun(run.id);
+    res.json({ run, leads });
+  } catch (err) {
+    console.error('[api] GET /pipeline/runs/:id xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
+router.get('/pipeline/runs/:id/export.csv', async (req, res) => {
+  try {
+    const run = await PipelineRun.findByPk(req.params.id);
+    if (!run) return res.status(404).json({ error: 'Yugurish topilmadi' });
+
+    const leads = await leadsForRun(run.id);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="pipeline-${run.id}.csv"`);
+    res.send(leadsToCsv(leads));
+  } catch (err) {
+    console.error('[api] GET /pipeline/runs/:id/export.csv xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
+// Diqqat: bu faqat papka guruhlashini (PipelineRun + PipelineRunLead) o'chiradi
+// — haqiqiy Lead qatorlari HECH QACHON o'chirilmaydi (Scan sessiyasidan farqi
+// shu — Lead tizimning asosiy, boshqa joylarda ham ishlatiladigan ma'lumoti).
+router.delete('/pipeline/runs/:id', async (req, res) => {
+  try {
+    const run = await PipelineRun.findByPk(req.params.id);
+    if (!run) return res.status(404).json({ error: 'Yugurish topilmadi' });
+
+    await PipelineRunLead.destroy({ where: { pipeline_run_id: run.id } });
+    await run.destroy();
+
+    res.json({ deleted: true, leadsPreserved: true });
+  } catch (err) {
+    console.error('[api] DELETE /pipeline/runs/:id xato:', err);
     res.status(500).json({ error: 'Server xatosi' });
   }
 });

@@ -294,4 +294,95 @@ ScanResult.init(
   }
 );
 
-export default { Lead, BlacklistEntry, ScanSession, ScanResult };
+// Bitta pipeline ishga tushirilishi ("qidiruv") — Lead'lar bo'limida ham
+// ScanSession bilan bir xil "papka" mantig'i. Lead esa mutabil, ko'p marta
+// yangilanishi mumkin bo'lgan yagona yozuv bo'lgani uchun (ScanResult'dan
+// farqli) natijalar to'g'ridan-to'g'ri emas, PipelineRunLead orqali
+// ko'p-ko'pga bog'lanadi — bitta lead bir necha yugurishga tegishli bo'lishi
+// mumkin.
+export class PipelineRun extends Model {}
+
+PipelineRun.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    keywords: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    status: {
+      type: DataTypes.ENUM('running', 'completed', 'cancelled', 'failed'),
+      allowNull: false,
+      defaultValue: 'running',
+    },
+    created_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    updated_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    skipped_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    failed_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    blacklisted_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    error_message: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'PipelineRun',
+    tableName: 'pipeline_runs',
+  }
+);
+
+export class PipelineRunLead extends Model {}
+
+PipelineRunLead.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    pipeline_run_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    lead_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    action: {
+      type: DataTypes.ENUM('created', 'updated'),
+      allowNull: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'PipelineRunLead',
+    tableName: 'pipeline_run_leads',
+    indexes: [{ unique: true, fields: ['pipeline_run_id', 'lead_id'] }],
+  }
+);
+
+export default { Lead, BlacklistEntry, ScanSession, ScanResult, PipelineRun, PipelineRunLead };
