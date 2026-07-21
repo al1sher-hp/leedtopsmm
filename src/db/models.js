@@ -95,4 +95,59 @@ Lead.init(
   }
 );
 
-export default { Lead };
+export class BlacklistEntry extends Model {}
+
+BlacklistEntry.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    target_type: {
+      type: DataTypes.ENUM('channel', 'group', 'bot'),
+      allowNull: false,
+    },
+    target_id: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+    },
+    target_username: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    target_title: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    status: {
+      type: DataTypes.ENUM('pending', 'active'),
+      allowNull: false,
+      defaultValue: 'pending',
+    },
+    // Tasdiqlanishi kutilayotgan amal — 'add' (ro'yxatga qo'shish) yoki
+    // 'remove' (olib tashlash). Ikkalasi ham bir xil kod-tavsifga joylashtirish
+    // usuli bilan tasdiqlanadi, shuning uchun ustun bitta.
+    pending_action: {
+      type: DataTypes.ENUM('add', 'remove'),
+      allowNull: true,
+    },
+    verification_code: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    verification_expires_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'BlacklistEntry',
+    tableName: 'blacklist_entries',
+    indexes: [{ unique: true, fields: ['target_id'] }],
+  }
+);
+
+export default { Lead, BlacklistEntry };

@@ -34,6 +34,13 @@ function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
 
+// Umumiy (FloodWait bo'lmagan) xatolar uchun eksponensial backoff — sof
+// funksiya (jitter'siz, testlanadigan). Chaqiruv joyida ustiga kichik
+// tasodifiy jitter qo'shiladi. 30s'da cap qilinadi.
+export function backoffDelayMs(attempt) {
+  return Math.min(30_000, 1000 * 2 ** attempt);
+}
+
 // Odam xatti-harakatiga o'xshash kutish vaqti: bir xil (tekis taqsimlangan)
 // oraliq o'zi ham "bot" belgisi bo'lishi mumkin — haqiqiy odam ko'pincha tez
 // harakat qiladi, ba'zida o'ylanib to'xtaydi, kamdan-kam chalg'iydi. Uch
@@ -61,35 +68,51 @@ function humanDelayMs() {
   return baseDelay + skewedJitter;
 }
 
-// Har bir sessiya o'zining soatlik so'rov byudjeti va delay'ini boshqaradi.
-// Bir nechta userbot akkaunt qo'shish uchun SessionPool'ga yangi StringSession qo'shish kifoya.
+const HOUR_MS = 3600_000;
+const DAY_MS = 86_400_000;
+
+// Har bir sessiya o'zining soatlik/kunlik so'rov byudjeti va delay'ini
+// boshqaradi. Bir nechta userbot akkaunt qo'shish uchun SessionPool'ga yangi
+// StringSession qo'shish kifoya.
 class RateLimitedSession {
   constructor(client, label) {
     this.client = client;
     this.label = label;
     this.requestsThisHour = 0;
     this.hourWindowStart = Date.now();
+    this.requestsToday = 0;
+    this.dayWindowStart = Date.now();
   }
 
   _resetWindowIfNeeded() {
     const now = Date.now();
-    if (now - this.hourWindowStart >= 3600_000) {
+    if (now - this.hourWindowStart >= HOUR_MS) {
       this.hourWindowStart = now;
       this.requestsThisHour = 0;
+    }
+    if (now - this.dayWindowStart >= DAY_MS) {
+      this.dayWindowStart = now;
+      this.requestsToday = 0;
     }
   }
 
   async _waitForBudget() {
     this._resetWindowIfNeeded();
-    while (this.requestsThisHour >= config.rateLimit.maxRequestsPerHour) {
+    while (
+      this.requestsThisHour >= config.rateLimit.maxRequestsPerHour ||
+      this.requestsToday >= config.rateLimit.maxRequestsPerDay
+    ) {
       pipelineCancellation.throwIfCancelled();
       const now = Date.now();
-      const msLeft = this.hourWindowStart + 3600_000 - now;
+      const hourlyExceeded = this.requestsThisHour >= config.rateLimit.maxRequestsPerHour;
+      const msLeft = hourlyExceeded
+        ? this.hourWindowStart + HOUR_MS - now
+        : this.dayWindowStart + DAY_MS - now;
       const waitMs = Math.max(msLeft, 1000);
       console.log(
-        `[rate-limit:${this.label}] soatlik limit (${config.rateLimit.maxRequestsPerHour}) tugadi, ${Math.ceil(
-          waitMs / 1000
-        )}s kutilmoqda...`
+        `[rate-limit:${this.label}] ${hourlyExceeded ? 'soatlik' : 'kunlik'} limit (${
+          hourlyExceeded ? config.rateLimit.maxRequestsPerHour : config.rateLimit.maxRequestsPerDay
+        }) tugadi, ${Math.ceil(waitMs / 1000)}s kutilmoqda...`
       );
       await cancellableSleep(Math.min(waitMs, 60_000));
       this._resetWindowIfNeeded();
@@ -111,6 +134,7 @@ class RateLimitedSession {
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         this.requestsThisHour += 1;
+        this.requestsToday += 1;
         return await this.client.invoke(request);
       } catch (err) {
         if (isFloodWaitError(err)) {
@@ -120,10 +144,13 @@ class RateLimitedSession {
           continue;
         }
         if (attempt < retries) {
+          const delay = backoffDelayMs(attempt) + Math.random() * 500;
           console.warn(
-            `[retry:${this.label}] so'rov xatosi: ${err.message}. Qayta urinish ${attempt + 1}/${retries}`
+            `[retry:${this.label}] so'rov xatosi: ${err.message}. Qayta urinish ${attempt + 1}/${retries} (${Math.round(
+              delay / 1000
+            )}s kutish)`
           );
-          await cancellableSleep(2000 * (attempt + 1));
+          await cancellableSleep(delay);
           continue;
         }
         throw err;

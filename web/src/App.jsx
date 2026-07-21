@@ -5,6 +5,7 @@ import PipelineControl from './components/PipelineControl.jsx';
 import LeadCard from './components/LeadCard.jsx';
 import LeadTable from './components/LeadTable.jsx';
 import Pagination from './components/Pagination.jsx';
+import BlacklistPage from './components/BlacklistPage.jsx';
 import {
   fetchLeads,
   fetchStats,
@@ -36,6 +37,7 @@ const DEFAULT_FILTERS = {
 const KEYWORDS_STORAGE_KEY = 'leedtopsmm.pipelineKeywords';
 
 export default function App() {
+  const [view, setView] = useState('leads');
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [leads, setLeads] = useState([]);
   const [pagination, setPagination] = useState(null);
@@ -167,57 +169,77 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       <header className="bg-indigo-600 text-white px-4 py-4 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
           <h1 className="text-lg font-bold">TopSMM Lead Dashboard</h1>
+          <nav className="flex items-center gap-1 bg-indigo-500/50 rounded-lg p-1">
+            <button
+              onClick={() => setView('leads')}
+              className={`text-sm px-3 py-1 rounded-md ${view === 'leads' ? 'bg-white text-indigo-700' : 'text-indigo-100'}`}
+            >
+              Lead'lar
+            </button>
+            <button
+              onClick={() => setView('blacklist')}
+              className={`text-sm px-3 py-1 rounded-md ${view === 'blacklist' ? 'bg-white text-indigo-700' : 'text-indigo-100'}`}
+            >
+              Qora ro'yxat
+            </button>
+          </nav>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 mt-4 flex flex-col gap-4">
-        <StatsHeader stats={stats} />
+        {view === 'blacklist' ? (
+          <BlacklistPage />
+        ) : (
+          <>
+            <StatsHeader stats={stats} />
 
-        <PipelineControl
-          keywords={pipelineKeywords}
-          onKeywordsChange={handleKeywordsChange}
-          running={pipelineRunning}
-          onStart={handleStartPipeline}
-          onStop={handleStopPipeline}
-          lastStats={pipelineLastStats}
-          lastError={pipelineLastError}
-          actionError={pipelineActionError}
-        />
+            <PipelineControl
+              keywords={pipelineKeywords}
+              onKeywordsChange={handleKeywordsChange}
+              running={pipelineRunning}
+              onStart={handleStartPipeline}
+              onStop={handleStopPipeline}
+              lastStats={pipelineLastStats}
+              lastError={pipelineLastError}
+              actionError={pipelineActionError}
+            />
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <Filters filters={filters} onChange={setFilters} keywords={keywords} />
-        </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <Filters filters={filters} onChange={setFilters} keywords={keywords} />
+            </div>
 
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-500">{pagination ? `${pagination.total} ta natija` : ''}</span>
-          <a
-            href={exportCsvUrl(filters)}
-            className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700"
-          >
-            CSV eksport
-          </a>
-        </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-500">{pagination ? `${pagination.total} ta natija` : ''}</span>
+              <a
+                href={exportCsvUrl(filters)}
+                className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700"
+              >
+                CSV eksport
+              </a>
+            </div>
 
-        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3">{error}</div>}
-        {loading && <div className="text-sm text-gray-400 text-center py-4">yuklanmoqda...</div>}
+            {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3">{error}</div>}
+            {loading && <div className="text-sm text-gray-400 text-center py-4">yuklanmoqda...</div>}
 
-        {!loading && leads.length === 0 && (
-          <div className="text-sm text-gray-400 text-center py-8">Hech qanday lead topilmadi</div>
+            {!loading && leads.length === 0 && (
+              <div className="text-sm text-gray-400 text-center py-8">Hech qanday lead topilmadi</div>
+            )}
+
+            <div className="md:hidden flex flex-col gap-3">
+              {leads.map((lead) => (
+                <LeadCard key={lead.id} lead={lead} onStatusChange={handleStatusChange} />
+              ))}
+            </div>
+
+            <div className="hidden md:block">
+              <LeadTable leads={leads} onStatusChange={handleStatusChange} />
+            </div>
+
+            <Pagination pagination={pagination} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+          </>
         )}
-
-        <div className="md:hidden flex flex-col gap-3">
-          {leads.map((lead) => (
-            <LeadCard key={lead.id} lead={lead} onStatusChange={handleStatusChange} />
-          ))}
-        </div>
-
-        <div className="hidden md:block">
-          <LeadTable leads={leads} onStatusChange={handleStatusChange} />
-        </div>
-
-        <Pagination pagination={pagination} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
       </main>
     </div>
   );

@@ -20,6 +20,7 @@ export const config = {
   },
   rateLimit: {
     maxRequestsPerHour: toInt(process.env.MAX_REQUESTS_PER_HOUR, 250),
+    maxRequestsPerDay: toInt(process.env.MAX_REQUESTS_PER_DAY, 2000),
     requestDelayMs: toInt(process.env.REQUEST_DELAY_MS, 3000),
     requestDelayJitterMs: toInt(process.env.REQUEST_DELAY_JITTER_MS, 1500),
   },

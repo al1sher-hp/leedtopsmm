@@ -68,6 +68,7 @@ export default function PipelineControl({
         <div className="text-xs text-gray-500">
           Oxirgi natija: {lastStats.created} ta yangi, {lastStats.updated} ta yangilandi,{' '}
           {lastStats.skipped} ta o'tkazib yuborildi
+          {lastStats.blacklisted > 0 && `, ${lastStats.blacklisted} ta qora ro'yxatda (yig'ilmadi)`}
           {lastStats.cancelled ? " — foydalanuvchi tomonidan to'xtatilgan" : ''}
         </div>
       )}

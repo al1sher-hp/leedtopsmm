@@ -66,6 +66,33 @@ export function exportCsvUrl(params) {
   return `${API_URL}/api/leads/export.csv?${query}`;
 }
 
+// Ro'yxatni o'qish DB'dan bo'lgani uchun tez API host'ida qoladi, lekin
+// so'rov/tasdiqlash egalikni Telegram orqali tekshirgani uchun (getPool())
+// pipeline bilan bir xil doim-ishlaydigan hostga yuboriladi.
+export function fetchBlacklist() {
+  return request('/api/blacklist');
+}
+
+export function requestBlacklist(identifier) {
+  return request(
+    '/api/blacklist/request',
+    { method: 'POST', body: JSON.stringify({ identifier }) },
+    PIPELINE_API_URL
+  );
+}
+
+export function verifyBlacklist(targetId) {
+  return request(
+    '/api/blacklist/verify',
+    { method: 'POST', body: JSON.stringify({ targetId }) },
+    PIPELINE_API_URL
+  );
+}
+
+export function requestBlacklistRemoval(targetId) {
+  return request(`/api/blacklist/${encodeURIComponent(targetId)}/remove-request`, { method: 'POST' }, PIPELINE_API_URL);
+}
+
 export default {
   fetchLeads,
   fetchStats,
@@ -75,4 +102,8 @@ export default {
   cancelPipeline,
   fetchPipelineStatus,
   exportCsvUrl,
+  fetchBlacklist,
+  requestBlacklist,
+  verifyBlacklist,
+  requestBlacklistRemoval,
 };

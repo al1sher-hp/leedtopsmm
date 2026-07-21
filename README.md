@@ -12,7 +12,25 @@ Postgres'ga yozadigan to'liq tizim + mobile-first React dashboard.
   olinadi, lekin ularning telefoni odatda `null` (privacy sozlamasi).
 - Tizim hech qachon a'zolarning telefonini ommaviy sug'urmaydi — faqat ochiq e'lon
   qilingan kontakt va admin username'lari yig'iladi.
-- Hech bir lead o'chirilmaydi. Gemini scoring faqat tartiblash uchun, filtr emas.
+- Hech bir lead o'chirilmaydi — **bittagina istisno bilan**: qora ro'yxat (blacklist)
+  yozuvi tasdiqlangach, o'sha kanal/guruhning avval yig'ilgan lead yozuvi ham o'chiriladi
+  (qarang: "Qora ro'yxat" bo'limi). Gemini scoring faqat tartiblash uchun, filtr emas.
+
+## Qora ro'yxat (Blacklist)
+
+Har qanday kanal/guruh/bot egasi o'z obyektini `/api/blacklist` orqali (dashboard'dagi
+"Qora ro'yxat" bo'limi) ochiq, ro'yxatdan o'tishsiz qora ro'yxatga qo'sha oladi:
+
+1. Manzil (`@username` yoki `t.me/...`) kiritiladi, tizim tasodifiy kod beradi.
+2. Kod kanal/guruh tavsifiga (yoki bot uchun BotFather `/setabouttext` orqali)
+   vaqtincha qo'yiladi — faqat admin/egasi tahrirlay oladigan yagona umumiy maydon,
+   shuning uchun bu egalikni tasdiqlash vazifasini bajaradi.
+3. "Tasdiqlash" bosilgach, tizim tavsifni qayta o'qib kodni tekshiradi va faol qiladi.
+4. Faol qora ro'yxat yozuvidan **ma'lumot yig'ish to'liq to'xtaydi** — tekshiruv
+   collector'ning eng pastki nuqtasida (`enrichCandidate()` boshida, har qanday
+   Telegram so'rovidan oldin) amalga oshiriladi, admin uchun ham istisno yo'q
+   (`src/enrich/enrich.js`, `src/blacklist/`).
+5. Istalgan vaqtda xuddi shu tasdiqlash usuli bilan ro'yxatdan olib tashlash mumkin.
 
 ## Papka strukturasi
 
@@ -92,9 +110,11 @@ Postgres'ga yozadigan to'liq tizim + mobile-first React dashboard.
   qiymatlarga og'irlik beradi), ~10% "o'ylanish" pauzasi (8-25s), ~2% "chalg'ish"
   tanaffusi (1-3 daqiqa). Bir xil (tekis taqsimlangan) oraliq o'zi ham bot belgisi
   bo'lishi mumkinligi uchun ataylab shunday qurilgan.
-- `FloodWaitError` avtomatik ushlanadi va ko'rsatilgan soniya kutiladi.
-- Soatlik so'rov limiti (`MAX_REQUESTS_PER_HOUR`) — limitga yetganda navbatdagi so'rov
-  soat oxirigacha kutadi.
+- `FloodWaitError` avtomatik ushlanadi va ko'rsatilgan soniya kutiladi. Boshqa (FloodWait
+  bo'lmagan) xatolarda eksponensial backoff qo'llaniladi (`backoffDelayMs()` —
+  1s, 2s, 4s... 30s'gacha cap, + kichik jitter).
+- Soatlik (`MAX_REQUESTS_PER_HOUR`) **va kunlik** (`MAX_REQUESTS_PER_DAY`) so'rov
+  limiti — ikkalasidan biriga yetganda navbatdagi so'rov oyna tugagunicha kutadi.
 - Ommaviy `JoinChannel` chaqirilmaydi — faqat public entity'lar o'qiladi.
 - `src/telegram/client.js` ichidagi `SessionPool` bir nechta userbot akkauntini
   (`SESSION` env'da vergul bilan ajratilgan) navbat bilan ishlata oladigan qilib

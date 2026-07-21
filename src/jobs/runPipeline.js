@@ -20,7 +20,17 @@ async function processCandidate(candidate, stats) {
     }
 
     console.log(`[pipeline] boyitilmoqda: ${candidate.title}`);
-    const enriched = await enrichCandidate(candidate);
+    let enriched;
+    try {
+      enriched = await enrichCandidate(candidate);
+    } catch (err) {
+      if (err.isBlacklisted) {
+        stats.blacklisted += 1;
+        console.log(`[pipeline] qora ro'yxatda, o'tkazib yuborildi: ${candidate.title}`);
+        return;
+      }
+      throw err;
+    }
 
     console.log(`[pipeline] baholanmoqda: ${candidate.title}`);
     const scored = await scoreLead(enriched);
@@ -54,7 +64,7 @@ export async function runPipeline({ keywords } = {}) {
   pipelineCancellation.reset();
   console.log('[pipeline] boshlanmoqda...');
 
-  const stats = { created: 0, updated: 0, skipped: 0, failed: 0, cancelled: false };
+  const stats = { created: 0, updated: 0, skipped: 0, failed: 0, blacklisted: 0, cancelled: false };
 
   let candidates;
   try {

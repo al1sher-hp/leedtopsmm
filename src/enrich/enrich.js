@@ -2,6 +2,7 @@ import { Api } from 'telegram';
 import { getPool } from '../telegram/client.js';
 import { extractFirstPhone } from '../extract/phone.js';
 import { extractContactUsername, isLikelyBotUsername } from '../extract/username.js';
+import { isBlacklisted, BlacklistedError } from '../blacklist/blacklist.js';
 
 function toInputChannel(chat) {
   return new Api.InputChannel({ channelId: chat.id, accessHash: chat.accessHash });
@@ -51,6 +52,14 @@ async function getAdminUsernames(pool, inputChannel) {
  * @returns {Promise<object>} Lead modeliga mos partial obyekt
  */
 export async function enrichCandidate(candidate, { recentLimit = 20 } = {}) {
+  // Blacklist tekshiruvi — collector'ning eng pastki nuqtasi, har qanday
+  // haqiqiy Telegram so'rovidan OLDIN. Bu yagona kirish nuqtasi bo'lgani
+  // uchun (discovery faqat nomzod topadi, aslida shu yerda o'qiladi) hech
+  // qanday chaqiruv yo'li buni chetlab o'ta olmaydi — istisno yo'q.
+  if (await isBlacklisted(candidate.channel_id)) {
+    throw new BlacklistedError(candidate.channel_id);
+  }
+
   const pool = await getPool();
   const chat = candidate.entity;
   const inputChannel = toInputChannel(chat);
