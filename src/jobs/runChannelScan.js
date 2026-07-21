@@ -47,6 +47,7 @@ export async function runChannelScan({ identifier, dateFromSec, dateToSec, keywo
         source_title: outcome.target.title,
         source_type: outcome.target.type,
         is_bot: r.is_bot,
+        message_id: r.message_id,
         message_date: r.message_date,
         message_excerpt: r.message_excerpt,
         matched_keyword: r.matched_keyword,
@@ -60,6 +61,7 @@ export async function runChannelScan({ identifier, dateFromSec, dateToSec, keywo
       await row.update({
         source_username: outcome.target.username,
         source_title: outcome.target.title,
+        message_id: r.message_id,
         message_date: r.message_date,
         message_excerpt: r.message_excerpt,
         matched_keyword: r.matched_keyword ?? row.matched_keyword,

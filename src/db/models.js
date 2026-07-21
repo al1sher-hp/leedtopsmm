@@ -188,6 +188,10 @@ ScanResult.init(
       allowNull: false,
       defaultValue: false,
     },
+    message_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     message_date: {
       type: DataTypes.DATE,
       allowNull: true,

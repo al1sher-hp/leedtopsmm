@@ -8,6 +8,69 @@ import {
   exportScanCsvUrl,
 } from '../lib/api.js';
 
+// Telegram t.me/<username>/<id>?embed=1 — Telegram'ning o'z ochiq "post
+// widget"i, API kalitsiz istalgan ochiq xabarni o'z formatida (avatar,
+// sana, media) ko'rsatib beradi. Faqat bosilganda yuklanadi (bir vaqtda
+// ko'p iframe ochilib ketmasligi uchun).
+function ScanResultRow({ r }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-2 py-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ContactBadge contactType={r.contact_type} isBot={r.is_bot} />
+            <span className="text-sm text-gray-900">{r.contact_value}</span>
+            {r.matched_keyword && (
+              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
+                {r.matched_keyword}
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-gray-400 truncate">
+            {r.source_title} {r.source_username ? `(@${r.source_username})` : ''} —{' '}
+            {r.message_date ? new Date(r.message_date).toLocaleString() : ''}
+          </div>
+          {r.message_excerpt && <div className="text-xs text-gray-400 truncate">"{r.message_excerpt}"</div>}
+        </div>
+
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {r.match_count > 1 && <span className="text-xs text-gray-400">{r.match_count}x</span>}
+          {r.message_link && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPreviewOpen((o) => !o)}
+                className="text-xs text-indigo-600 hover:text-indigo-800"
+              >
+                {previewOpen ? 'Yashirish' : 'Xabarni ko\'rish'}
+              </button>
+              <a
+                href={r.message_link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs bg-indigo-50 text-indigo-700 rounded-lg px-2 py-1 hover:bg-indigo-100"
+              >
+                Telegram'da ochish
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {previewOpen && r.message_link && (
+        <iframe
+          src={`${r.message_link}?embed=1`}
+          title={`xabar-${r.id}`}
+          className="w-full rounded-lg border border-gray-100"
+          style={{ height: 260 }}
+          loading="lazy"
+        />
+      )}
+    </div>
+  );
+}
+
 export default function ChannelScanPage() {
   const [identifier, setIdentifier] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -218,25 +281,7 @@ export default function ChannelScanPage() {
 
         <div className="flex flex-col divide-y divide-gray-100">
           {results.map((r) => (
-            <div key={r.id} className="flex items-start justify-between gap-3 py-2">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <ContactBadge contactType={r.contact_type} isBot={r.is_bot} />
-                  <span className="text-sm text-gray-900">{r.contact_value}</span>
-                  {r.matched_keyword && (
-                    <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
-                      {r.matched_keyword}
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-gray-400 truncate">
-                  {r.source_title} {r.source_username ? `(@${r.source_username})` : ''} —{' '}
-                  {r.message_date ? new Date(r.message_date).toLocaleString() : ''}
-                </div>
-                {r.message_excerpt && <div className="text-xs text-gray-400 truncate">"{r.message_excerpt}"</div>}
-              </div>
-              {r.match_count > 1 && <span className="text-xs text-gray-400 shrink-0">{r.match_count}x</span>}
-            </div>
+            <ScanResultRow key={r.id} r={r} />
           ))}
         </div>
       </div>

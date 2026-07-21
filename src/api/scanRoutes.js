@@ -12,6 +12,18 @@ function buildWhere(query) {
   return where;
 }
 
+// Xabar havolasi faqat ochiq (username'li) manba + saqlangan message_id
+// bo'lsa quriladi — tizim faqat shunday manbalarni skanerlaydi, shuning
+// uchun amalda deyarli har doim mavjud bo'ladi.
+function withMessageLink(row) {
+  const plain = row.toJSON ? row.toJSON() : row;
+  const message_link =
+    plain.source_username && plain.message_id
+      ? `https://t.me/${plain.source_username}/${plain.message_id}`
+      : null;
+  return { ...plain, message_link };
+}
+
 router.get('/', async (req, res) => {
   try {
     const where = buildWhere(req.query);
@@ -26,7 +38,10 @@ router.get('/', async (req, res) => {
       offset,
     });
 
-    res.json({ data: rows, pagination: { page, limit, total: count, totalPages: Math.ceil(count / limit) } });
+    res.json({
+      data: rows.map(withMessageLink),
+      pagination: { page, limit, total: count, totalPages: Math.ceil(count / limit) },
+    });
   } catch (err) {
     console.error('[scan] GET / xato:', err);
     res.status(500).json({ error: 'Server xatosi' });
@@ -47,10 +62,10 @@ router.get('/export.csv', async (req, res) => {
 
     const columns = [
       'source_title', 'source_username', 'contact_type', 'contact_value',
-      'is_bot', 'message_date', 'matched_keyword', 'match_count',
+      'is_bot', 'message_date', 'message_link', 'matched_keyword', 'match_count',
     ];
     const headerLine = columns.join(',');
-    const lines = rows.map((r) => columns.map((col) => toCsvValue(r[col])).join(','));
+    const lines = rows.map(withMessageLink).map((r) => columns.map((col) => toCsvValue(r[col])).join(','));
     const csv = [headerLine, ...lines].join('\n');
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
