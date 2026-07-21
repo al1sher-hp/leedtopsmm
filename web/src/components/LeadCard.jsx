@@ -42,7 +42,9 @@ export default function LeadCard({ lead, onStatusChange }) {
 
       <div className="text-sm text-gray-700 flex flex-col gap-0.5">
         {lead.phone && <div>Telefon: {lead.phone}</div>}
-        {lead.contact_username && <div>Foydalanuvchi: @{lead.contact_username}</div>}
+        {lead.contact_username && (
+          <div>{lead.contact_is_bot ? 'Bot' : 'Foydalanuvchi'}: @{lead.contact_username}</div>
+        )}
         {!lead.phone && !lead.contact_username && <div className="text-gray-400">kontakt topilmadi</div>}
       </div>
 
