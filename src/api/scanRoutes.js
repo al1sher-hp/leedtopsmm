@@ -1,16 +1,8 @@
 import { Router } from 'express';
-import { Op } from 'sequelize';
-import { ScanResult } from '../db/models.js';
+import { ScanSession, ScanResult } from '../db/models.js';
 import { parseIdentifier } from '../blacklist/blacklist.js';
 
 const router = Router();
-
-function buildWhere(query) {
-  const where = {};
-  if (query.source_channel_id) where.source_channel_id = query.source_channel_id;
-  if (query.contact_type) where.contact_type = query.contact_type;
-  return where;
-}
 
 // Xabar havolasi faqat ochiq (username'li) manba + saqlangan message_id
 // bo'lsa quriladi — tizim faqat shunday manbalarni skanerlaydi, shuning
@@ -24,30 +16,6 @@ function withMessageLink(row) {
   return { ...plain, message_link };
 }
 
-router.get('/', async (req, res) => {
-  try {
-    const where = buildWhere(req.query);
-    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-    const offset = (page - 1) * limit;
-
-    const { rows, count } = await ScanResult.findAndCountAll({
-      where,
-      order: [['message_date', 'DESC']],
-      limit,
-      offset,
-    });
-
-    res.json({
-      data: rows.map(withMessageLink),
-      pagination: { page, limit, total: count, totalPages: Math.ceil(count / limit) },
-    });
-  } catch (err) {
-    console.error('[scan] GET / xato:', err);
-    res.status(500).json({ error: 'Server xatosi' });
-  }
-});
-
 function toCsvValue(value) {
   if (value === null || value === undefined) return '';
   const str = String(value);
@@ -55,24 +23,78 @@ function toCsvValue(value) {
   return str;
 }
 
-router.get('/export.csv', async (req, res) => {
-  try {
-    const where = buildWhere(req.query);
-    const rows = await ScanResult.findAll({ where, order: [['message_date', 'DESC']] });
+const SCAN_RESULT_CSV_COLUMNS = [
+  'source_title', 'source_username', 'contact_type', 'contact_value',
+  'is_bot', 'message_date', 'message_link', 'matched_keyword', 'match_count',
+];
 
-    const columns = [
-      'source_title', 'source_username', 'contact_type', 'contact_value',
-      'is_bot', 'message_date', 'message_link', 'matched_keyword', 'match_count',
-    ];
-    const headerLine = columns.join(',');
-    const lines = rows.map(withMessageLink).map((r) => columns.map((col) => toCsvValue(r[col])).join(','));
-    const csv = [headerLine, ...lines].join('\n');
+function toCsv(rows) {
+  const headerLine = SCAN_RESULT_CSV_COLUMNS.join(',');
+  const lines = rows
+    .map(withMessageLink)
+    .map((r) => SCAN_RESULT_CSV_COLUMNS.map((col) => toCsvValue(r[col])).join(','));
+  return '﻿' + [headerLine, ...lines].join('\n');
+}
+
+// Har bir skanerlash o'z sessiyasida saqlanadi — "fayl menejeri"dagi papka
+// kabi, turli skanerlashlar natijalari bir-biriga aralashmaydi.
+router.get('/sessions', async (req, res) => {
+  try {
+    const sessions = await ScanSession.findAll({ order: [['createdAt', 'DESC']] });
+    res.json({ data: sessions });
+  } catch (err) {
+    console.error('[scan] GET /sessions xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
+router.get('/sessions/:id', async (req, res) => {
+  try {
+    const session = await ScanSession.findByPk(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Sessiya topilmadi' });
+
+    const results = await ScanResult.findAll({
+      where: { scan_session_id: session.id },
+      order: [['message_date', 'DESC']],
+    });
+
+    res.json({ session, results: results.map(withMessageLink) });
+  } catch (err) {
+    console.error('[scan] GET /sessions/:id xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
+router.get('/sessions/:id/export.csv', async (req, res) => {
+  try {
+    const session = await ScanSession.findByPk(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Sessiya topilmadi' });
+
+    const results = await ScanResult.findAll({
+      where: { scan_session_id: session.id },
+      order: [['message_date', 'DESC']],
+    });
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="scan-results.csv"');
-    res.send('﻿' + csv);
+    res.setHeader('Content-Disposition', `attachment; filename="scan-${session.id}.csv"`);
+    res.send(toCsv(results));
   } catch (err) {
-    console.error('[scan] GET /export.csv xato:', err);
+    console.error('[scan] GET /sessions/:id/export.csv xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
+router.delete('/sessions/:id', async (req, res) => {
+  try {
+    const session = await ScanSession.findByPk(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Sessiya topilmadi' });
+
+    await ScanResult.destroy({ where: { scan_session_id: session.id } });
+    await session.destroy();
+
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('[scan] DELETE /sessions/:id xato:', err);
     res.status(500).json({ error: 'Server xatosi' });
   }
 });

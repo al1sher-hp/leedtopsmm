@@ -112,14 +112,22 @@ export function fetchChannelScanStatus() {
   return request('/api/scan/status', {}, PIPELINE_API_URL);
 }
 
-export function fetchScanResults(params) {
-  const query = new URLSearchParams(cleanParams(params)).toString();
-  return request(`/api/scan?${query}`);
+// Har bir skanerlash o'z sessiyasida ("papka") saqlanadi — quyidagilar shu
+// sessiyalar bilan ishlaydi.
+export function fetchScanSessions() {
+  return request('/api/scan/sessions');
 }
 
-export function exportScanCsvUrl(params) {
-  const query = new URLSearchParams(cleanParams(params)).toString();
-  return `${API_URL}/api/scan/export.csv?${query}`;
+export function fetchScanSession(id) {
+  return request(`/api/scan/sessions/${id}`);
+}
+
+export function deleteScanSession(id) {
+  return request(`/api/scan/sessions/${id}`, { method: 'DELETE' });
+}
+
+export function exportScanSessionCsvUrl(id) {
+  return `${API_URL}/api/scan/sessions/${id}/export.csv`;
 }
 
 export default {
@@ -138,6 +146,8 @@ export default {
   runChannelScan,
   cancelChannelScan,
   fetchChannelScanStatus,
-  fetchScanResults,
-  exportScanCsvUrl,
+  fetchScanSessions,
+  fetchScanSession,
+  deleteScanSession,
+  exportScanSessionCsvUrl,
 };

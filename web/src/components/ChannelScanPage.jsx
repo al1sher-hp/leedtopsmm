@@ -4,8 +4,10 @@ import {
   runChannelScan,
   cancelChannelScan,
   fetchChannelScanStatus,
-  fetchScanResults,
-  exportScanCsvUrl,
+  fetchScanSessions,
+  fetchScanSession,
+  deleteScanSession,
+  exportScanSessionCsvUrl,
 } from '../lib/api.js';
 
 // Telegram t.me/<username>/<id>?embed=1 — Telegram'ning o'z ochiq "post
@@ -29,7 +31,6 @@ function ScanResultRow({ r }) {
             )}
           </div>
           <div className="text-xs text-gray-400 truncate">
-            {r.source_title} {r.source_username ? `(@${r.source_username})` : ''} —{' '}
             {r.message_date ? new Date(r.message_date).toLocaleString() : ''}
           </div>
           {r.message_excerpt && <div className="text-xs text-gray-400 truncate">"{r.message_excerpt}"</div>}
@@ -43,7 +44,7 @@ function ScanResultRow({ r }) {
                 onClick={() => setPreviewOpen((o) => !o)}
                 className="text-xs text-indigo-600 hover:text-indigo-800"
               >
-                {previewOpen ? 'Yashirish' : 'Xabarni ko\'rish'}
+                {previewOpen ? 'Yashirish' : "Xabarni ko'rish"}
               </button>
               <a
                 href={r.message_link}
@@ -71,6 +72,129 @@ function ScanResultRow({ r }) {
   );
 }
 
+const STATUS_LABELS = { completed: 'Tugallandi', cancelled: "To'xtatilgan", failed: 'Xato' };
+const STATUS_STYLES = {
+  completed: 'bg-emerald-100 text-emerald-700',
+  cancelled: 'bg-gray-100 text-gray-500',
+  failed: 'bg-red-100 text-red-700',
+};
+
+// Har bir skanerlash — fayl menejeridagi papka kabi: yopiq holda sarlavha
+// + statistika, bosilganda o'sha skanerlashning natijalari (faqat o'ziniki,
+// boshqa skanerlash natijalari bilan aralashmaydi) ochiladi.
+function SessionFolder({ session, onDeleted }) {
+  const [open, setOpen] = useState(false);
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const toggleOpen = async () => {
+    if (!open && results === null) {
+      setLoading(true);
+      try {
+        const res = await fetchScanSession(session.id);
+        setResults(res.results);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    setOpen((o) => !o);
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteScanSession(session.id);
+      onDeleted(session.id);
+    } catch (err) {
+      console.error(err);
+      setDeleting(false);
+    }
+  };
+
+  const dateRange =
+    session.date_from && session.date_to
+      ? `${new Date(session.date_from).toLocaleDateString()} – ${new Date(session.date_to).toLocaleDateString()}`
+      : '';
+
+  return (
+    <div className="border border-gray-100 rounded-lg">
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <button onClick={toggleOpen} className="flex items-start gap-2 min-w-0 flex-1 text-left">
+          <span className="text-lg leading-none mt-0.5">{open ? '📂' : '📁'}</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-gray-900 truncate">
+                {session.source_title || session.source_username || '—'}
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[session.status]}`}>
+                {STATUS_LABELS[session.status]}
+              </span>
+              <span className="text-xs text-gray-400">{session.found_count} ta kontakt</span>
+            </div>
+            <div className="text-xs text-gray-400 truncate">
+              {dateRange}
+              {session.keywords ? ` — kalit so'z: ${session.keywords}` : ''} —{' '}
+              {new Date(session.createdAt).toLocaleString()}
+            </div>
+            {session.error_message && (
+              <div className="text-xs text-red-500 truncate">{session.error_message}</div>
+            )}
+          </div>
+        </button>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {session.found_count > 0 && (
+            <a
+              href={exportScanSessionCsvUrl(session.id)}
+              className="text-xs bg-emerald-50 text-emerald-700 rounded-lg px-2 py-1 hover:bg-emerald-100"
+            >
+              Yuklab olish
+            </a>
+          )}
+          {!confirmDelete ? (
+            <button onClick={() => setConfirmDelete(true)} className="text-xs text-gray-400 hover:text-red-600">
+              O'chirish
+            </button>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="text-xs text-red-600 font-medium hover:text-red-800 disabled:opacity-40"
+              >
+                Tasdiqlash
+              </button>
+              <button onClick={() => setConfirmDelete(false)} className="text-xs text-gray-400 hover:text-gray-600">
+                Bekor
+              </button>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {open && (
+        <div className="border-t border-gray-100 px-3">
+          {loading && <div className="text-xs text-gray-400 py-2">yuklanmoqda...</div>}
+          {!loading && results?.length === 0 && (
+            <div className="text-xs text-gray-400 py-2">Bu skanerlashda kontakt topilmadi.</div>
+          )}
+          {!loading && results && results.length > 0 && (
+            <div className="flex flex-col divide-y divide-gray-100">
+              {results.map((r) => (
+                <ScanResultRow key={r.id} r={r} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChannelScanPage() {
   const [identifier, setIdentifier] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -82,26 +206,24 @@ export default function ChannelScanPage() {
   const [lastError, setLastError] = useState(null);
   const [actionError, setActionError] = useState(null);
 
-  const [results, setResults] = useState([]);
-  const [pagination, setPagination] = useState(null);
-  const [loadingResults, setLoadingResults] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
 
-  const loadResults = useCallback(async () => {
-    setLoadingResults(true);
+  const loadSessions = useCallback(async () => {
+    setLoadingSessions(true);
     try {
-      const res = await fetchScanResults({ page: 1, limit: 50 });
-      setResults(res.data);
-      setPagination(res.pagination);
+      const res = await fetchScanSessions();
+      setSessions(res.data);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoadingResults(false);
+      setLoadingSessions(false);
     }
   }, []);
 
   useEffect(() => {
-    loadResults();
-  }, [loadResults]);
+    loadSessions();
+  }, [loadSessions]);
 
   useEffect(() => {
     fetchChannelScanStatus()
@@ -122,7 +244,7 @@ export default function ChannelScanPage() {
           setLastStats(res.state.lastStats);
           setLastError(res.state.lastError);
           clearInterval(interval);
-          loadResults();
+          loadSessions();
         }
       } catch (err) {
         console.error(err);
@@ -159,6 +281,10 @@ export default function ChannelScanPage() {
     }
   };
 
+  const handleSessionDeleted = (id) => {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3">
@@ -174,7 +300,7 @@ export default function ChannelScanPage() {
         <p className="text-xs text-gray-500">
           Bitta kanal yoki guruhning postlari/xabarlari matnidan, belgilangan sana oralig'ida, ochiq yozilgan
           telefon/username'larni yig'adi. Xabar yuboruvchisining o'zi hech qachon saqlanmaydi — faqat matnda
-          ochiq yozilgan kontakt.
+          ochiq yozilgan kontakt. Har bir skanerlash o'zining alohida papkasida saqlanadi.
         </p>
 
         <div>
@@ -252,8 +378,7 @@ export default function ChannelScanPage() {
         {!running && lastError && <div className="text-xs text-red-600">Oxirgi urinish xatosi: {lastError}</div>}
         {!running && lastStats && !lastError && (
           <div className="text-xs text-gray-500">
-            Oxirgi natija: {lastStats.scanned} ta xabar tekshirildi, {lastStats.found} ta kontakt topildi (
-            {lastStats.created} ta yangi, {lastStats.updated} ta yangilandi)
+            Oxirgi natija: {lastStats.scanned} ta xabar tekshirildi, {lastStats.found} ta kontakt topildi
             {lastStats.hitCap &&
               " — xabarlar chegarasiga yetildi, davr boshigacha to'liq tekshirilmagan bo'lishi mumkin"}
             {lastStats.cancelled ? " — foydalanuvchi tomonidan to'xtatilgan" : ''}
@@ -262,26 +387,18 @@ export default function ChannelScanPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-700">
-            Topilgan kontaktlar {pagination ? `(${pagination.total})` : ''}
-          </h3>
-          <a
-            href={exportScanCsvUrl({})}
-            className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700"
-          >
-            CSV eksport
-          </a>
-        </div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">
+          Skanerlashlar {sessions.length > 0 ? `(${sessions.length})` : ''}
+        </h3>
 
-        {loadingResults && <div className="text-xs text-gray-400">yuklanmoqda...</div>}
-        {!loadingResults && results.length === 0 && (
-          <div className="text-xs text-gray-400">Hozircha natija yo'q.</div>
+        {loadingSessions && <div className="text-xs text-gray-400">yuklanmoqda...</div>}
+        {!loadingSessions && sessions.length === 0 && (
+          <div className="text-xs text-gray-400">Hozircha skanerlash o'tkazilmagan.</div>
         )}
 
-        <div className="flex flex-col divide-y divide-gray-100">
-          {results.map((r) => (
-            <ScanResultRow key={r.id} r={r} />
+        <div className="flex flex-col gap-2">
+          {sessions.map((s) => (
+            <SessionFolder key={s.id} session={s} onDeleted={handleSessionDeleted} />
           ))}
         </div>
       </div>

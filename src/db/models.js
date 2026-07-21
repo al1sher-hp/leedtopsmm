@@ -150,6 +150,78 @@ BlacklistEntry.init(
   }
 );
 
+// Bitta skanerlash ishga tushirilishi ("qidiruv") — natijalar shu sessiyaga
+// bog'lanadi, shunda turli skanerlashlar bir-biriga aralashib ketmaydi
+// (har biri "fayl menejeri"dagi alohida papka kabi ko'rinadi/o'chiriladi).
+export class ScanSession extends Model {}
+
+ScanSession.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    source_channel_id: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    source_username: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    source_title: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    source_type: {
+      type: DataTypes.ENUM('channel', 'group'),
+      allowNull: true,
+    },
+    date_from: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    date_to: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    keywords: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    scanned_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    found_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    hit_cap: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    status: {
+      type: DataTypes.ENUM('completed', 'cancelled', 'failed'),
+      allowNull: false,
+      defaultValue: 'completed',
+    },
+    error_message: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'ScanSession',
+    tableName: 'scan_sessions',
+  }
+);
+
 export class ScanResult extends Model {}
 
 ScanResult.init(
@@ -158,6 +230,10 @@ ScanResult.init(
       type: DataTypes.INTEGER,
       autoIncrement: true,
       primaryKey: true,
+    },
+    scan_session_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     source_channel_id: {
       type: DataTypes.STRING,
@@ -214,8 +290,8 @@ ScanResult.init(
     sequelize,
     modelName: 'ScanResult',
     tableName: 'scan_results',
-    indexes: [{ unique: true, fields: ['source_channel_id', 'contact_type', 'contact_value'] }],
+    indexes: [{ unique: true, fields: ['scan_session_id', 'contact_type', 'contact_value'] }],
   }
 );
 
-export default { Lead, BlacklistEntry, ScanResult };
+export default { Lead, BlacklistEntry, ScanSession, ScanResult };
