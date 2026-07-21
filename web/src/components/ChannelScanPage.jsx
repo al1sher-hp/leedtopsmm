@@ -210,8 +210,9 @@ export default function ChannelScanPage() {
   const showingLive = running && selectedSessionId === null;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
-      <div className="flex-1 min-w-0 flex flex-col gap-4">
+    <div className="flex flex-col lg:flex-row lg:items-start gap-4">
+      <div className="flex-1 min-w-0">
+      <div className="max-w-4xl mx-auto flex flex-col gap-4">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-700">Kanal/Guruh qidiruv</h2>
@@ -365,6 +366,7 @@ export default function ChannelScanPage() {
             O'ngdagi ro'yxatdan bir skanerlashni tanlang, yoki yangi qidiruv boshlang.
           </div>
         )}
+      </div>
       </div>
 
       <FolderSidebar

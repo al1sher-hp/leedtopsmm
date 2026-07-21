@@ -254,8 +254,9 @@ export default function LeadsPage() {
   });
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
-      <div className="flex-1 min-w-0 flex flex-col gap-4">
+    <div className="flex flex-col lg:flex-row lg:items-start gap-4">
+      <div className="flex-1 min-w-0">
+      <div className="max-w-4xl mx-auto flex flex-col gap-4">
         <StatsHeader stats={stats} />
 
         <PipelineControl
@@ -336,6 +337,7 @@ export default function LeadsPage() {
         {!showingRun && (
           <Pagination pagination={pagination} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         )}
+      </div>
       </div>
 
       <FolderSidebar

@@ -123,7 +123,7 @@ export default function BlacklistPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="max-w-4xl mx-auto w-full flex flex-col gap-4">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-700">Qora ro'yxat</h2>
