@@ -12,6 +12,7 @@
     "login": "node src/telegram/login.js",
     "migrate": "node src/db/migrate.js",
     "backfill:bot": "node src/db/backfillContactIsBot.js",
+    "backfill:runs": "node src/db/backfillOrphanLeadsRun.js",
     "pipeline": "node src/jobs/runPipeline.js",
     "api": "node src/api/server.js",
     "api:dev": "node --watch src/api/server.js",

@@ -199,6 +199,11 @@ export default function LeadsPage() {
           loadLeads(filters);
           loadStats();
           loadRuns();
+          // Kanal qidiruvdagi kabi — tugagan yugurish natijasi ortiqcha
+          // bosishsiz darhol o'zining papkasida ko'rinadi.
+          if (res.state.lastStats?.runId) {
+            setSelectedRunId(res.state.lastStats.runId);
+          }
         }
       } catch (err) {
         console.error(err);
