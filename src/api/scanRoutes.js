@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { ScanSession, ScanResult } from '../db/models.js';
 import { parseIdentifier } from '../blacklist/blacklist.js';
+import { sanitizeKeywords, MAX_KEYWORDS } from '../utils/keywords.js';
 
 const router = Router();
 
@@ -142,9 +143,16 @@ router.post('/run', async (req, res) => {
     return res.status(400).json({ error: "Sana oralig'i yaroqsiz." });
   }
 
-  const keywords = Array.isArray(req.body?.keywords)
-    ? req.body.keywords.map((k) => String(k).trim()).filter(Boolean)
-    : [];
+  // Skanerlash uchun kalit so'z ixtiyoriy (bo'sh bo'lsa barcha kontaktlar
+  // yig'iladi) — lekin berilgan bo'lsa ham tozalanadi (trim/bo'sh/dublikat)
+  // va yuqori chegara bilan cheklanadi.
+  const keywords = sanitizeKeywords(req.body?.keywords);
+
+  if (keywords.length > MAX_KEYWORDS) {
+    return res.status(400).json({
+      error: `Juda ko'p kalit so'z — bir martada ko'pi bilan ${MAX_KEYWORDS} ta so'z bering (${keywords.length} ta berildi).`,
+    });
+  }
 
   scanState.running = true;
   scanState.startedAt = new Date().toISOString();

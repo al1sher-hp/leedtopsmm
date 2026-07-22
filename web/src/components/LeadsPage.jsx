@@ -48,6 +48,35 @@ const RUN_STATUS_STYLES = {
   failed: 'bg-red-100 text-red-700',
 };
 
+// CSV eksport qaysi ustunlarni o'z ichiga olishini tanlash — CEO talabi:
+// standart holatda faqat telefon, xohlasa username/havola qo'shiladi.
+// Ikkala ko'rinishda (global va papka) bir xil tanlov qayta ishlatiladi.
+function ExportFieldOptions({ includeUsername, onIncludeUsernameChange, includeLink, onIncludeLinkChange }) {
+  return (
+    <div className="flex items-center gap-3 text-xs text-gray-500">
+      <span className="text-gray-400">CSV: telefon +</span>
+      <label className="flex items-center gap-1">
+        <input
+          type="checkbox"
+          checked={includeUsername}
+          onChange={(e) => onIncludeUsernameChange(e.target.checked)}
+          className="rounded border-gray-300"
+        />
+        username
+      </label>
+      <label className="flex items-center gap-1">
+        <input
+          type="checkbox"
+          checked={includeLink}
+          onChange={(e) => onIncludeLinkChange(e.target.checked)}
+          className="rounded border-gray-300"
+        />
+        havola
+      </label>
+    </div>
+  );
+}
+
 export default function LeadsPage() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [leads, setLeads] = useState([]);
@@ -64,6 +93,13 @@ export default function LeadsPage() {
   const [pipelineLastStats, setPipelineLastStats] = useState(null);
   const [pipelineLastError, setPipelineLastError] = useState(null);
   const [pipelineActionError, setPipelineActionError] = useState(null);
+
+  // CSV eksport ustunlari — telefon doim yoniq, boshqalari ixtiyoriy.
+  // "Faqat telefonli" eksport uchun alohida, Filtrlardagi has_phone bilan
+  // OR mantig'ida ishlaydi (ikkalasidan biri yoqilsa kifoya).
+  const [exportUsername, setExportUsername] = useState(false);
+  const [exportLink, setExportLink] = useState(false);
+  const [exportPhoneOnly, setExportPhoneOnly] = useState(false);
 
   // Har bir pipeline yugurishi — o'ng paneldagi "papka". null = Hammasi
   // (global ko'rinish, standart holat).
@@ -246,6 +282,15 @@ export default function LeadsPage() {
     if (selectedRunId === id) setSelectedRunId(null);
   };
 
+  const exportFields = ['phone', ...(exportUsername ? ['username'] : []), ...(exportLink ? ['link'] : [])].join(
+    ','
+  );
+  const globalExportUrl = exportCsvUrl({
+    ...filters,
+    has_phone: filters.has_phone === 'true' || exportPhoneOnly ? 'true' : filters.has_phone,
+    fields: exportFields,
+  });
+
   const sidebarItems = runs.map((r) => {
     const total = r.created_count + r.updated_count;
     return {
@@ -254,7 +299,7 @@ export default function LeadsPage() {
       badge: { text: RUN_STATUS_LABELS[r.status], style: RUN_STATUS_STYLES[r.status] },
       meta: `${total} ta lead — ${new Date(r.createdAt).toLocaleString()}`,
       errorText: r.error_message,
-      downloadUrl: total > 0 ? exportPipelineRunCsvUrl(r.id) : null,
+      downloadUrl: total > 0 ? exportPipelineRunCsvUrl(r.id, { fields: exportFields }) : null,
     };
   });
 
@@ -291,19 +336,27 @@ export default function LeadsPage() {
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={exportPipelineRunCsvUrl(selectedRunId)}
-                  className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700"
-                >
-                  CSV eksport
-                </a>
-                <button
-                  onClick={() => setSelectedRunId(null)}
-                  className="text-sm text-gray-500 hover:text-gray-700"
-                >
-                  Yopish
-                </button>
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="flex items-center gap-2">
+                  <a
+                    href={exportPipelineRunCsvUrl(selectedRunId, { fields: exportFields })}
+                    className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700"
+                  >
+                    CSV eksport
+                  </a>
+                  <button
+                    onClick={() => setSelectedRunId(null)}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Yopish
+                  </button>
+                </div>
+                <ExportFieldOptions
+                  includeUsername={exportUsername}
+                  onIncludeUsernameChange={setExportUsername}
+                  includeLink={exportLink}
+                  onIncludeLinkChange={setExportLink}
+                />
               </div>
             </div>
           </div>
@@ -313,14 +366,31 @@ export default function LeadsPage() {
               <Filters filters={filters} onChange={setFilters} keywords={keywords} />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <span className="text-sm text-gray-500">{pagination ? `${pagination.total} ta natija` : ''}</span>
-              <a
-                href={exportCsvUrl(filters)}
-                className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700"
-              >
-                CSV eksport
-              </a>
+              <div className="flex flex-col items-end gap-1.5">
+                <a
+                  href={globalExportUrl}
+                  className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700"
+                >
+                  CSV eksport
+                </a>
+                <ExportFieldOptions
+                  includeUsername={exportUsername}
+                  onIncludeUsernameChange={setExportUsername}
+                  includeLink={exportLink}
+                  onIncludeLinkChange={setExportLink}
+                />
+                <label className="flex items-center gap-1 text-xs text-gray-500">
+                  <input
+                    type="checkbox"
+                    checked={exportPhoneOnly}
+                    onChange={(e) => setExportPhoneOnly(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  Faqat telefonli lead'lar (eksportda)
+                </label>
+              </div>
             </div>
           </>
         )}

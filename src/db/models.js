@@ -11,7 +11,9 @@ Lead.init(
       primaryKey: true,
     },
     channel_title: {
-      type: DataTypes.STRING,
+      // TEXT — ba'zi kanal nomlari 255 belgidan uzun bo'lishi mumkin
+      // (boyitish shu sababli yiqilmasin).
+      type: DataTypes.TEXT,
       allowNull: false,
     },
     channel_username: {
@@ -199,7 +201,8 @@ ScanSession.init(
       allowNull: true,
     },
     keywords: {
-      type: DataTypes.STRING,
+      // TEXT — ko'p kalit so'z birlashtirilganda 255 belgidan oshishi mumkin.
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     scanned_count: {
@@ -322,7 +325,10 @@ PipelineRun.init(
       primaryKey: true,
     },
     keywords: {
-      type: DataTypes.STRING,
+      // TEXT — pipeline'ga ko'p kalit so'z berilsa `join(', ')` natijasi
+      // 255 belgidan oshib, VARCHAR(255)'da "value too long" xatosiga
+      // olib kelardi (pipeline hech boshlanmasdan yiqilardi).
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     status: {

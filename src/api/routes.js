@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { Op } from 'sequelize';
 import { Lead, PipelineRun, PipelineRunLead } from '../db/models.js';
+import { sanitizeKeywords, MAX_KEYWORDS } from '../utils/keywords.js';
 
 const router = Router();
 
@@ -166,11 +167,35 @@ function toCsvValue(value) {
   return str;
 }
 
-const LEAD_CSV_COLUMNS = [
-  'channel_title', 'channel_username', 'phone', 'contact_username',
-  'contact_type', 'contact_is_bot', 'category', 'lang', 'matched_keyword',
-  'status', 'createdAt',
-];
+// CEO talabi: eksport standart holatda faqat telefon raqamini bersin,
+// foydalanuvchi xohlasa username/kanal havolasini ham qo'sha oladi.
+// `EXPORT_FIELDS` — kanonik tartib (so'ralgan tartibdan qat'i nazar CSV
+// har doim shu tartibda chiqadi); whitelist'dan tashqari qiymatlar
+// e'tiborsiz qoldiriladi.
+const EXPORT_FIELDS = ['phone', 'username', 'link'];
+const DEFAULT_EXPORT_FIELDS = ['phone'];
+
+function parseExportFields(raw) {
+  if (!raw) return DEFAULT_EXPORT_FIELDS;
+  const requested = new Set(
+    String(raw).split(',').map((f) => f.trim().toLowerCase()).filter(Boolean)
+  );
+  const valid = EXPORT_FIELDS.filter((f) => requested.has(f));
+  return valid.length > 0 ? valid : DEFAULT_EXPORT_FIELDS;
+}
+
+// `streamCsv`ning umumiy `columns.map(col => row[col])` mexanizmiga mos
+// kelishi uchun har bir lead'ni tanlangan "mantiqiy" ustun nomlari
+// (phone/username/link) bilan qayta shakllantiradi — `link` haqiqiy DB
+// ustuni emas, `channel_username`dan hisoblanadi.
+function decorateLeadForExport(lead) {
+  const plain = lead.toJSON ? lead.toJSON() : lead;
+  return {
+    phone: plain.phone || '',
+    username: plain.contact_username ? `@${plain.contact_username}` : '',
+    link: plain.channel_username ? `https://t.me/${plain.channel_username}` : '',
+  };
+}
 
 const CSV_BATCH_SIZE = 500;
 
@@ -203,9 +228,11 @@ router.get('/leads/export.csv', async (req, res) => {
   try {
     const where = buildWhere(req.query);
     const order = buildOrder(req.query.sort);
-    await streamCsv(res, 'leads.csv', LEAD_CSV_COLUMNS, (offset, limit) =>
-      Lead.findAll({ where, order, limit, offset })
-    );
+    const fields = parseExportFields(req.query.fields);
+    await streamCsv(res, 'leads.csv', fields, async (offset, limit) => {
+      const rows = await Lead.findAll({ where, order, limit, offset });
+      return rows.map(decorateLeadForExport);
+    });
   } catch (err) {
     console.error('[api] GET /leads/export.csv xato:', err);
     if (!res.headersSent) res.status(500).json({ error: 'Server xatosi' });
@@ -257,10 +284,12 @@ router.get('/pipeline/runs/:id/export.csv', async (req, res) => {
     });
     const leadIds = links.map((l) => l.lead_id);
 
-    await streamCsv(res, `pipeline-${run.id}.csv`, LEAD_CSV_COLUMNS, async (offset, limit) => {
+    const fields = parseExportFields(req.query.fields);
+    await streamCsv(res, `pipeline-${run.id}.csv`, fields, async (offset, limit) => {
       const idsPage = leadIds.slice(offset, offset + limit);
       if (idsPage.length === 0) return [];
-      return Lead.findAll({ where: { id: { [Op.in]: idsPage } }, order: [['gemini_score', 'DESC']] });
+      const rows = await Lead.findAll({ where: { id: { [Op.in]: idsPage } }, order: [['gemini_score', 'DESC']] });
+      return rows.map(decorateLeadForExport);
     });
   } catch (err) {
     console.error('[api] GET /pipeline/runs/:id/export.csv xato:', err);
@@ -316,14 +345,19 @@ router.post('/pipeline/run', async (req, res) => {
   }
 
   // Kalit so'zsiz pipeline ishga tushmaydi — behuda (nimani qidirishni
-  // bilmaydigan) ishlashning oldini oladi.
-  const keywords = Array.isArray(req.body?.keywords)
-    ? req.body.keywords.map((k) => String(k).trim()).filter(Boolean)
-    : [];
+  // bilmaydigan) ishlashning oldini oladi. Tozalash (trim/bo'sh/dublikat)
+  // markazlashgan — qarang: src/utils/keywords.js.
+  const keywords = sanitizeKeywords(req.body?.keywords);
 
   if (keywords.length === 0) {
     return res.status(400).json({
       error: "Kalit so'zlar kiritilishi shart — kamida bitta so'z bering (masalan \"Toshkent\", \"biznes\").",
+    });
+  }
+
+  if (keywords.length > MAX_KEYWORDS) {
+    return res.status(400).json({
+      error: `Juda ko'p kalit so'z — bir martada ko'pi bilan ${MAX_KEYWORDS} ta so'z bering (${keywords.length} ta berildi).`,
     });
   }
 
@@ -370,5 +404,5 @@ router.get('/pipeline/status', (req, res) => {
   res.json({ state: pipelineState });
 });
 
-export { buildWhere, buildOrder, streamCsv, LEAD_CSV_COLUMNS };
+export { buildWhere, buildOrder, streamCsv, parseExportFields, decorateLeadForExport };
 export default router;

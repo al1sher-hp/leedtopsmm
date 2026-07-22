@@ -80,8 +80,9 @@ export function deletePipelineRun(id) {
   return request(`/api/pipeline/runs/${id}`, { method: 'DELETE' });
 }
 
-export function exportPipelineRunCsvUrl(id) {
-  return `${API_URL}/api/pipeline/runs/${id}/export.csv`;
+export function exportPipelineRunCsvUrl(id, params) {
+  const query = new URLSearchParams(cleanParams(params)).toString();
+  return `${API_URL}/api/pipeline/runs/${id}/export.csv${query ? `?${query}` : ''}`;
 }
 
 // Ro'yxatni o'qish DB'dan bo'lgani uchun tez API host'ida qoladi, lekin
