@@ -4,7 +4,9 @@ import { Lead, PipelineRun, PipelineRunLead } from '../db/models.js';
 
 const router = Router();
 
-router.get('/health', (req, res) => res.json({ ok: true }));
+// Eslatma: /health endpoint'i endi faqat app.js'da (DB holatini aks
+// ettiradigan to'ldirilgan variant) — bu yerdagi takroriy, DB'siz versiya
+// olib tashlandi.
 
 const SORTABLE_FIELDS = new Set(['gemini_score', 'subs', 'createdAt', 'updatedAt', 'channel_title', 'id']);
 const VALID_STATUSES = ['new', 'contacted', 'replied', 'client', 'rejected'];
@@ -170,25 +172,44 @@ const LEAD_CSV_COLUMNS = [
   'status', 'createdAt',
 ];
 
-function leadsToCsv(leads) {
-  const headerLine = LEAD_CSV_COLUMNS.join(',');
-  const lines = leads.map((lead) => LEAD_CSV_COLUMNS.map((col) => toCsvValue(lead[col])).join(','));
+const CSV_BATCH_SIZE = 500;
+
+// Butun natijani xotiraga yig'ib bitta katta satr qurish o'rniga, header'ni
+// darhol yuborib, qatorlarni paketlab oqim (stream) sifatida yozadi — juda
+// katta jadvallarda ham xotira sarfi bir paket hajmi bilan chegaralanadi.
+// `fetchPage(offset, limit)` har chaqiruvda navbatdagi paketni qaytarishi kerak.
+// `batchSize` odatda standart qiymatida qoladi — testlarda kichikroq qiymat
+// bilan ko'p-paketli sikl xatti-harakatini haqiqiy 500 qatorsiz tekshirish
+// uchun parametrlashtirilgan.
+async function streamCsv(res, filename, columns, fetchPage, batchSize = CSV_BATCH_SIZE) {
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   // BOM — Excel'da UZ/RU harflar to'g'ri ko'rinishi uchun
-  return '﻿' + [headerLine, ...lines].join('\n');
+  res.write('﻿' + columns.join(','));
+
+  let offset = 0;
+  while (true) {
+    const batch = await fetchPage(offset, batchSize);
+    if (batch.length === 0) break;
+    const lines = batch.map((row) => columns.map((col) => toCsvValue(row[col])).join(','));
+    res.write('\n' + lines.join('\n'));
+    if (batch.length < batchSize) break;
+    offset += batchSize;
+  }
+  res.end();
 }
 
 router.get('/leads/export.csv', async (req, res) => {
   try {
     const where = buildWhere(req.query);
     const order = buildOrder(req.query.sort);
-    const leads = await Lead.findAll({ where, order });
-
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="leads.csv"');
-    res.send(leadsToCsv(leads));
+    await streamCsv(res, 'leads.csv', LEAD_CSV_COLUMNS, (offset, limit) =>
+      Lead.findAll({ where, order, limit, offset })
+    );
   } catch (err) {
     console.error('[api] GET /leads/export.csv xato:', err);
-    res.status(500).json({ error: 'Server xatosi' });
+    if (!res.headersSent) res.status(500).json({ error: 'Server xatosi' });
+    else res.end();
   }
 });
 
@@ -230,13 +251,21 @@ router.get('/pipeline/runs/:id/export.csv', async (req, res) => {
     const run = await PipelineRun.findByPk(req.params.id);
     if (!run) return res.status(404).json({ error: 'Yugurish topilmadi' });
 
-    const leads = await leadsForRun(run.id);
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="pipeline-${run.id}.csv"`);
-    res.send(leadsToCsv(leads));
+    const links = await PipelineRunLead.findAll({
+      where: { pipeline_run_id: run.id },
+      attributes: ['lead_id'],
+    });
+    const leadIds = links.map((l) => l.lead_id);
+
+    await streamCsv(res, `pipeline-${run.id}.csv`, LEAD_CSV_COLUMNS, async (offset, limit) => {
+      const idsPage = leadIds.slice(offset, offset + limit);
+      if (idsPage.length === 0) return [];
+      return Lead.findAll({ where: { id: { [Op.in]: idsPage } }, order: [['gemini_score', 'DESC']] });
+    });
   } catch (err) {
     console.error('[api] GET /pipeline/runs/:id/export.csv xato:', err);
-    res.status(500).json({ error: 'Server xatosi' });
+    if (!res.headersSent) res.status(500).json({ error: 'Server xatosi' });
+    else res.end();
   }
 });
 
@@ -341,5 +370,5 @@ router.get('/pipeline/status', (req, res) => {
   res.json({ state: pipelineState });
 });
 
-export { buildWhere, buildOrder };
+export { buildWhere, buildOrder, streamCsv, LEAD_CSV_COLUMNS };
 export default router;

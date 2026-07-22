@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'url';
 import sequelize from '../db/index.js';
 import { Lead, PipelineRun, PipelineRunLead } from '../db/models.js';
+import { closeStalePipelineRuns } from '../db/staleRuns.js';
 import { runDiscovery } from '../discovery/discovery.js';
 import { enrichCandidate } from '../enrich/enrich.js';
 import { scoreLead } from '../score/gemini.js';
@@ -85,6 +86,10 @@ export async function runPipeline({ keywords } = {}) {
   await sequelize.authenticate();
   pipelineCancellation.reset();
   console.log('[pipeline] boshlanmoqda...');
+
+  // Har ehtimolga qarshi — server startida ham chaqiriladi, lekin bu yerda
+  // ham qo'shimcha xavfsizlik qatlami sifatida.
+  await closeStalePipelineRuns().catch((err) => console.error('[pipeline] osilib qolgan run tozalash xatosi:', err.message));
 
   const stats = { created: 0, updated: 0, skipped: 0, failed: 0, blacklisted: 0, cancelled: false };
 

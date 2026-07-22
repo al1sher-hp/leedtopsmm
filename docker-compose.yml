@@ -29,7 +29,7 @@ services:
       API_HASH: ${API_HASH}
       SESSION: ${SESSION}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/leedtopsmm
       MAX_REQUESTS_PER_HOUR: ${MAX_REQUESTS_PER_HOUR:-250}
       REQUEST_DELAY_MS: ${REQUEST_DELAY_MS:-3000}

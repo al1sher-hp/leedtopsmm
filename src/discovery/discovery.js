@@ -120,6 +120,13 @@ export async function findSimilarChannels(seedCandidates, { depth = config.disco
 export async function discoverFromCatalog(catalogUsernames = CATALOG_CHANNELS, { messageLimit = 50 } = {}) {
   const pool = await getPool();
   const results = new Map();
+  // Bir xil @username bir nechta katalog manbasida (yoki bitta manbaning
+  // matnida bir necha marta) uchrashi mumkin — avvalgi holatda bu qayta-qayta
+  // ResolveUsername chaqirilishiga olib kelardi (dedup tekshiruvi `results`
+  // Map'ida channel_id bo'yicha edi, username bo'yicha emas — hech qachon
+  // mos kelmasdi). Endi har username shu funksiya davomida faqat bir marta
+  // resolve qilinadi (muvaffaqiyatli yoki xato — ikkalasi ham keshlanadi).
+  const resolvedUsernames = new Map();
 
   for (const username of catalogUsernames) {
     pipelineCancellation.throwIfCancelled();
@@ -143,13 +150,19 @@ export async function discoverFromCatalog(catalogUsernames = CATALOG_CHANNELS, {
 
       for (const uname of foundUsernames) {
         if (uname === username.toLowerCase()) continue;
-        if (results.has(uname)) continue;
+        if (resolvedUsernames.has(uname)) {
+          const cached = resolvedUsernames.get(uname);
+          if (cached) results.set(cached.channel_id, cached);
+          continue;
+        }
         try {
           const res = await pool.invoke(new Api.contacts.ResolveUsername({ username: uname }));
           const candChat = res.chats?.[0];
           const candidate = chatToCandidate(candChat, 'catalog');
+          resolvedUsernames.set(uname, candidate || null);
           if (candidate) results.set(candidate.channel_id, candidate);
         } catch (err) {
+          resolvedUsernames.set(uname, null);
           console.warn(`[discovery:catalog] "@${uname}" resolve xato: ${err.message}`);
         }
       }

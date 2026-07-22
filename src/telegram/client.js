@@ -136,10 +136,15 @@ class RateLimitedSession {
     }
     await cancellableSleep(delay, token);
 
+    // Hisoblagich bitta MANTIQIY so'rov uchun bir marta oshiriladi — FloodWait
+    // yoki umumiy xato retry'lari xuddi shu so'rovni qayta-qayta "sarflagan"
+    // deb hisoblab, byudjetni asossiz tez tugatib qo'ymasligi uchun sikldan
+    // TASHQARIDA, chaqiruv haqiqatan qilinishidan oldin bir marta oshiriladi.
+    this.requestsThisHour += 1;
+    this.requestsToday += 1;
+
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        this.requestsThisHour += 1;
-        this.requestsToday += 1;
         return await this.client.invoke(request);
       } catch (err) {
         if (isFloodWaitError(err)) {

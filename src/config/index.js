@@ -13,7 +13,11 @@ export const config = {
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
-    model: process.env.GEMINI_MODEL || 'gemini-3-flash-preview',
+    // 'gemini-3-flash-preview' ishlaydi, lekin "preview" modellar oldindan
+    // ogohlantirishsiz o'chirilib qolishi mumkin (masalan gemini-2.0-flash
+    // 2026-06-01'da to'xtatildi) — shuning uchun standart qiymat GA
+    // (barqaror) modelga o'rnatilgan.
+    model: process.env.GEMINI_MODEL || 'gemini-3.5-flash',
   },
   db: {
     url: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/leedtopsmm',

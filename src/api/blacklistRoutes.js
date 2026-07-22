@@ -16,9 +16,20 @@ const RATE_LIMIT_WINDOW_MS = 10 * 60_000;
 const RATE_LIMIT_MAX = 5;
 const rateLimitState = new Map();
 
+// Muddati o'tgan yozuvlarni tozalash — bo'lmasa Map cheksiz o'sib boradi
+// (har yangi IP uchun yozuv qo'shiladi-yu, hech qachon o'chirilmaydi).
+function pruneExpiredRateLimits(now) {
+  for (const [ip, entry] of rateLimitState) {
+    if (now - entry.windowStart >= RATE_LIMIT_WINDOW_MS) {
+      rateLimitState.delete(ip);
+    }
+  }
+}
+
 function rateLimit(req, res, next) {
   const ip = req.ip || 'unknown';
   const now = Date.now();
+  pruneExpiredRateLimits(now);
   const entry = rateLimitState.get(ip);
   if (!entry || now - entry.windowStart >= RATE_LIMIT_WINDOW_MS) {
     rateLimitState.set(ip, { count: 1, windowStart: now });

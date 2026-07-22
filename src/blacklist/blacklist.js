@@ -34,8 +34,17 @@ export class BlacklistedError extends Error {
 }
 
 // Har bir yig'ish so'rovida chaqirilgani uchun DB'ga bormasdan tez javob
-// berish kerak — aktiv target_id'lar shu jarayon xotirasida keshlanadi.
-const CACHE_TTL_MS = 60_000;
+// berish kerak — aktiv target_id'lar shu JARAYON (process) xotirasida
+// keshlanadi. `BLACKLIST_CACHE_TTL_MS` orqali sozlanadi (standart 60s).
+//
+// DIQQAT — ko'p-instansiyali deploy (masalan bir nechta API konteyner/worker
+// bir vaqtda ishlayotgan bo'lsa): bu kesh instansiyalar orasida DARHOL
+// yangilanmaydi — bitta instansiyada tasdiqlangan/olib tashlangan yozuv
+// boshqa instansiyalarda TTL muddati tugagunicha eski holatda ko'rinishi
+// mumkin. To'liq yechim uchun Postgres LISTEN/NOTIFY orqali `invalidateCache()`ni
+// barcha instansiyalarga real vaqtda tarqatish mumkin (ixtiyoriy, hozircha
+// amalga oshirilmagan — bitta instansiyali deploy uchun bu kesh yetarli).
+const CACHE_TTL_MS = Number(process.env.BLACKLIST_CACHE_TTL_MS) || 60_000;
 let cache = new Set();
 let cacheLoadedAt = 0;
 let loadingPromise = null;

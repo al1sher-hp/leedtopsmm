@@ -100,6 +100,14 @@ export async function scoreLead(lead, { retries = 3, delayMs = 400 } = {}) {
         await sleep(delayMs * (attempt + 2));
         continue;
       }
+      // Model topilmadi/404 kabi xatolar odatda noto'g'ri GEMINI_MODEL
+      // nomini bildiradi — scoring jimgina null qaytarishdan oldin buni
+      // aniq ko'rsatib qo'yamiz, aks holda sabab aniqlash qiyin bo'ladi.
+      if (/not found|404|invalid model|unsupported/i.test(err.message || '')) {
+        console.error(
+          `[gemini] Model "${config.gemini.model}" topilmadi bo'lishi mumkin — GEMINI_MODEL noto'g'ri bo'lishi mumkin.`
+        );
+      }
       return {
         segment: 'other',
         gemini_score: null,

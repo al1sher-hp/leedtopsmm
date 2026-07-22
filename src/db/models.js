@@ -19,9 +19,13 @@ Lead.init(
       allowNull: true,
     },
     channel_id: {
+      // Unique cheklov FAQAT quyidagi `indexes` massivida e'lon qilinadi —
+      // bu yerda ham `unique: true` qo'yish `sync({alter:true})`ni har
+      // ishga tushirilganda yangi, boshqa nomli unique constraint qo'shishga
+      // majbur qilardi (eskisini "tanimay"), natijada bir xil ustunga
+      // o'nlab dublikat constraint yig'ilib qolgan edi.
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
     },
     type: {
       type: DataTypes.ENUM('channel', 'group'),
@@ -91,7 +95,15 @@ Lead.init(
     sequelize,
     modelName: 'Lead',
     tableName: 'leads',
-    indexes: [{ unique: true, fields: ['channel_id'] }],
+    indexes: [
+      { unique: true, fields: ['channel_id'] },
+      // Filtr (buildWhere) va saralashda tez-tez ishlatiladigan ustunlar.
+      { fields: ['segment'] },
+      { fields: ['status'] },
+      { fields: ['contact_type'] },
+      { fields: ['matched_keyword'] },
+      { fields: ['createdAt'] },
+    ],
   }
 );
 
@@ -109,9 +121,9 @@ BlacklistEntry.init(
       allowNull: false,
     },
     target_id: {
+      // channel_id'dagi kabi — unique cheklov faqat pastdagi `indexes`da.
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
     },
     target_username: {
       type: DataTypes.STRING,
