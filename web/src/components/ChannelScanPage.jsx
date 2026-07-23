@@ -9,6 +9,8 @@ import {
   fetchScanSession,
   deleteScanSession,
   exportScanSessionCsvUrl,
+  exportScanSessionXlsxUrl,
+  exportParticipants,
   promoteSessionToLead,
 } from '../lib/api.js';
 
@@ -89,6 +91,9 @@ export default function ChannelScanPage() {
   const [captureSenders, setCaptureSenders] = useState(false);
   const [promoting, setPromoting] = useState(false);
   const [promoteResult, setPromoteResult] = useState(null);
+  const [participantsIdentifier, setParticipantsIdentifier] = useState('');
+  const [participantsLoading, setParticipantsLoading] = useState(false);
+  const [participantsError, setParticipantsError] = useState(null);
 
   const [running, setRunning] = useState(false);
   const [lastStats, setLastStats] = useState(null);
@@ -212,6 +217,26 @@ export default function ChannelScanPage() {
     }
   };
 
+  const handleExportParticipants = async () => {
+    const id = participantsIdentifier.trim();
+    if (!id) return;
+    setParticipantsLoading(true);
+    setParticipantsError(null);
+    try {
+      const { blob, filename } = await exportParticipants(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setParticipantsError(err.message);
+    } finally {
+      setParticipantsLoading(false);
+    }
+  };
+
   const handleDeleteSession = async (id) => {
     await deleteScanSession(id);
     setSessions((prev) => prev.filter((s) => s.id !== id));
@@ -310,7 +335,7 @@ export default function ChannelScanPage() {
               className="rounded border-gray-300 text-indigo-600"
             />
             <span className="text-xs text-gray-600">
-              Guruh xabari yuboruvchilarini ham yig' (havolalar va xabar yozgan userlar)
+              Xabar/izoh yuboruvchilarini ham yig' (guruh xabarlari + kanal izohlari)
             </span>
           </label>
 
@@ -375,12 +400,20 @@ export default function ChannelScanPage() {
                       {promoting ? "Ko'chirilmoqda..." : "Lead'ga ko'chirish"}
                     </button>
                     {sessionDetail.results.length > 0 && (
-                      <a
-                        href={exportScanSessionCsvUrl(selectedSessionId)}
-                        className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700"
-                      >
-                        CSV eksport
-                      </a>
+                      <>
+                        <a
+                          href={exportScanSessionXlsxUrl(selectedSessionId)}
+                          className="text-sm bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700"
+                        >
+                          XLSX eksport
+                        </a>
+                        <a
+                          href={exportScanSessionCsvUrl(selectedSessionId)}
+                          className="text-sm bg-gray-100 text-gray-700 rounded-lg px-3 py-1.5 hover:bg-gray-200"
+                        >
+                          CSV
+                        </a>
+                      </>
                     )}
                     <button
                       onClick={() => setSelectedSessionId(null)}
@@ -418,6 +451,35 @@ export default function ChannelScanPage() {
             O'ngdagi ro'yxatdan bir skanerlashni tanlang, yoki yangi qidiruv boshlang.
           </div>
         )}
+
+        {/* Guruh a'zolari eksporti — @Markoy_Legend_bot kabi group-users.xlsx */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">Guruh/kanal a'zolari eksporti</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Guruh yoki kanalning barcha a'zolari ro'yxatini XLSX faylga yuklab olish.
+              Mavjud username, ism va telefon (agar ochiq bo'lsa) ko'rsatiladi.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={participantsIdentifier}
+              onChange={(e) => setParticipantsIdentifier(e.target.value)}
+              disabled={participantsLoading}
+              placeholder="@guruh_username yoki https://t.me/guruh"
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <button
+              onClick={handleExportParticipants}
+              disabled={participantsLoading || !participantsIdentifier.trim()}
+              className="text-sm bg-indigo-600 text-white rounded-lg px-4 py-2 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              {participantsLoading ? 'Yuklanmoqda...' : 'XLSX yuklab olish'}
+            </button>
+          </div>
+          {participantsError && <div className="text-xs text-red-600">{participantsError}</div>}
+        </div>
       </div>
 
       <FolderSidebar

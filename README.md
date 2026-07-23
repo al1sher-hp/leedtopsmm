@@ -131,6 +131,40 @@ Har qanday kanal/guruh/bot egasi o'z obyektini `/api/blacklist` orqali (dashboar
 | `POST /api/pipeline/run` | Pipeline'ni background'da ishga tushirish |
 | `GET /api/pipeline/status` | Pipeline holati |
 
+## Kanal skanerlash (Scan) moduli
+
+Mavjud kanal yoki guruhning postlari/xabarlaridan ochiq yozilgan kontaktlarni (telefon,
+username) yig'adigan alohida modul. Leads pipeline'dan farqli — bu to'g'ridan-to'g'ri
+bitta manbani chuqur tekshiradi.
+
+| Endpoint | Tavsif |
+|---|---|
+| `POST /api/scan/run` | Skanerlashni background'da ishga tushirish. Body: `{ identifier, dateFrom, dateTo, keywords?, captureSenders? }` |
+| `GET /api/scan/status` | Joriy skanerlash holati |
+| `POST /api/scan/cancel` | Skanerlashni to'xtatish |
+| `GET /api/scan/sessions` | Barcha skanerlash sessiyalari ro'yxati |
+| `GET /api/scan/sessions/:id` | Bitta sessiya + natijalari |
+| `GET /api/scan/sessions/:id/export.csv` | Sessiya natijalarini CSV ga yuklab olish |
+| `GET /api/scan/sessions/:id/export.xlsx` | Sessiya natijalarini XLSX (Excel) ga yuklab olish |
+| `DELETE /api/scan/sessions/:id` | Sessiyani o'chirish |
+| `POST /api/scan/sessions/:id/promote` | Sessiya manbasi kanalini Lead'ga ko'chirish |
+| `POST /api/scan/participants` | Guruh/kanal barcha a'zolarini XLSX ga eksport. Body: `{ identifier }` |
+
+### `captureSenders` bayrog'i
+
+`POST /api/scan/run` da `"captureSenders": true` berilsa:
+
+- **Guruh** (megagroup): xabar yuboruvchilarning username'lari yig'iladi (`matched_keyword: "sender"`).
+- **Kanal** (broadcast): postlar matnidan kontakt yig'ishdan tashqari, kanalning
+  **linked discussion group** (izohlar guruhi) ham skanerlanaib, izoh yozganlar
+  ham yig'iladi (`matched_keyword: "comment_sender"`).
+
+### `POST /api/scan/participants`
+
+Guruh yoki kanalning barcha a'zolarini GramJS `GetParticipants` orqali olib, Excel
+faylga chiqaradi (`group-<id>-users.xlsx`). Fayl quyidagi ustunlarni o'z ichiga oladi:
+ID, Ism, Username, Telefon (faqat ochiq bo'lsa), Bot, Premium, Deleted.
+
 ## Skriptlar
 
 | Skript | Tavsif |

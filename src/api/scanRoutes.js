@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import * as XLSX from 'xlsx';
 import { Lead, ScanSession, ScanResult } from '../db/models.js';
 import { parseIdentifier } from '../blacklist/blacklist.js';
 import { sanitizeKeywords, MAX_KEYWORDS } from '../utils/keywords.js';
@@ -197,6 +198,132 @@ router.post('/cancel', async (req, res) => {
 
 router.get('/status', (req, res) => {
   res.json({ state: scanState });
+});
+
+// Scan sessiyasi natijalarini XLSX (Excel) formatida yuklab olish.
+// @Markoy_Legend_bot kabi group-users.xlsx formati: username, phone, match_count va h.k.
+router.get('/sessions/:id/export.xlsx', async (req, res) => {
+  try {
+    const session = await ScanSession.findByPk(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Sessiya topilmadi' });
+
+    const results = await ScanResult.findAll({
+      where: { scan_session_id: session.id },
+      order: [['match_count', 'DESC']],
+    });
+
+    const rows = results.map((r) => {
+      const plain = r.toJSON ? r.toJSON() : r;
+      return {
+        Tur: plain.contact_type === 'phone' ? 'Telefon' : 'Username',
+        Kontakt: plain.contact_value,
+        Bot: plain.is_bot ? 'Ha' : "Yo'q",
+        'Uchrashuv soni': plain.match_count,
+        Kalit_soz: plain.matched_keyword || '',
+        Sana: plain.message_date ? new Date(plain.message_date).toLocaleString('uz') : '',
+        Havola: plain.source_username && plain.message_id
+          ? `https://t.me/${plain.source_username}/${plain.message_id}`
+          : '',
+        Manba: plain.source_title || plain.source_username || '',
+      };
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    // Ustun kengliklarini avtomatik belgilash
+    ws['!cols'] = [
+      { wch: 10 }, { wch: 25 }, { wch: 6 }, { wch: 14 }, { wch: 15 }, { wch: 20 }, { wch: 45 }, { wch: 25 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'Kontaktlar');
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const filename = `scan-${session.source_username || session.id}-kontaktlar.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[scan] GET /sessions/:id/export.xlsx xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
+/**
+ * Guruh/kanal a'zolarini XLSX formatida eksport qilish.
+ * @Markoy_Legend_bot kabi group-<id>-users.xlsx fayl chiqaradi.
+ * Body: { identifier: "@username" }
+ */
+router.post('/participants', async (req, res) => {
+  if (process.env.VERCEL) {
+    return res.status(501).json({ error: "A'zolar eksporti Vercel'da ishlamaydi — doim ishlaydigan host kerak." });
+  }
+
+  const identifier = parseIdentifier(req.body?.identifier);
+  if (!identifier) {
+    return res.status(400).json({ error: "@username yoki t.me/username formatida kanal/guruh kiriting." });
+  }
+
+  try {
+    const { getPool } = await import('../telegram/client.js');
+    const { resolveChannelOrGroup } = await import('../scan/channelScan.js');
+    const { Api } = await import('telegram');
+
+    const pool = await getPool();
+    const chat = await resolveChannelOrGroup(pool, identifier);
+    const inputChannel = new Api.InputChannel({ channelId: chat.id, accessHash: chat.accessHash });
+
+    const participants = [];
+    let offset = 0;
+    const limit = 200;
+
+    while (true) {
+      const result = await pool.invoke(
+        new Api.channels.GetParticipants({
+          channel: inputChannel,
+          filter: new Api.ChannelParticipantsSearch({ q: '' }),
+          offset,
+          limit,
+          hash: 0n,
+        })
+      );
+
+      const users = result.users || [];
+      if (users.length === 0) break;
+
+      for (const u of users) {
+        participants.push({
+          ID: u.id?.toString() || '',
+          Ism: [u.firstName, u.lastName].filter(Boolean).join(' '),
+          Username: u.username ? `@${u.username}` : '',
+          Telefon: u.phone ? `+${u.phone}` : '',
+          Bot: u.bot ? 'Ha' : "Yo'q",
+          Premium: u.premium ? 'Ha' : "Yo'q",
+          Deleted: u.deleted ? 'Ha' : "Yo'q",
+        });
+      }
+
+      offset += users.length;
+      if (users.length < limit) break;
+      // Flood limitdan himoya: har 200 ta so'rovdan keyin 2 soniya kut
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(participants);
+    ws['!cols'] = [
+      { wch: 14 }, { wch: 25 }, { wch: 22 }, { wch: 16 }, { wch: 6 }, { wch: 8 }, { wch: 8 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, "A'zolar");
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const groupId = chat.id?.toString() || identifier.replace('@', '');
+    const filename = `group-${groupId}-users.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[scan] POST /participants xato:', err);
+    res.status(500).json({ error: err.message || 'Server xatosi' });
+  }
 });
 
 /**

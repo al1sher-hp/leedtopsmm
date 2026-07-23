@@ -55,7 +55,8 @@ function excerptOf(text) {
  * Bitta kanal/guruhning postlari/xabarlari matnidan (sana oralig'ida,
  * ixtiyoriy kalit so'z bilan filtrlab) ochiq yozilgan telefon/username'larni
  * yig'adi. `captureSenders: true` bo'lsa guruh xabarlari yuboruvchilarining
- * username'larini ham qo'shimcha yig'adi.
+ * username'larini ham qo'shimcha yig'adi; broadcast kanal uchun linked
+ * discussion group'idagi izoh yozganlar ham yig'iladi.
  */
 export async function scanChannel(pool, { identifier, dateFromSec, dateToSec, keywords = [], captureSenders = false } = {}) {
   const chat = await resolveChannelOrGroup(pool, identifier);
@@ -190,6 +191,90 @@ export async function scanChannel(pool, { identifier, dateFromSec, dateToSec, ke
     if (reachedStart || hitCap) break;
     if (messages.length < PAGE_SIZE) break; // tarix tugadi
     offsetId = messages[messages.length - 1].id;
+  }
+
+  // Broadcast kanal bo'lsa va captureSenders yoqlangan bo'lsa —
+  // linked discussion group'ini (izohlar guruhi) ham skanerlaydi.
+  if (captureSenders && !chat.megagroup && chat.broadcast) {
+    try {
+      const fullChannel = await pool.invoke(
+        new Api.channels.GetFullChannel({ channel: inputChannel }),
+        { cancellationToken: scanCancellation }
+      );
+      const linkedChatId = fullChannel.fullChat?.linkedChatId;
+      if (linkedChatId) {
+        const linkedChat = (fullChannel.chats || []).find((c) => {
+          const cid = typeof c.id === 'bigint' ? c.id : BigInt(c.id);
+          const lid = typeof linkedChatId === 'bigint' ? linkedChatId : BigInt(linkedChatId);
+          return cid === lid;
+        });
+        if (linkedChat) {
+          const linkedInput = new Api.InputChannel({ channelId: linkedChat.id, accessHash: linkedChat.accessHash });
+          const linkedUsersMap = new Map();
+          let linkedOffsetId = 0;
+          let linkedScanned = 0;
+          let linkedReachedStart = false;
+
+          while (linkedScanned < MAX_MESSAGES) {
+            scanCancellation.throwIfCancelled();
+            const lHistory = await pool.invoke(
+              new Api.messages.GetHistory({
+                peer: linkedInput,
+                limit: PAGE_SIZE,
+                offsetId: linkedOffsetId,
+                offsetDate: 0,
+                addOffset: 0,
+                maxId: 0,
+                minId: 0,
+                hash: 0n,
+              }),
+              { cancellationToken: scanCancellation }
+            );
+            const lMessages = lHistory.messages || [];
+            if (lMessages.length === 0) break;
+
+            for (const u of (lHistory.users || [])) {
+              if (u.username && !linkedUsersMap.has(u.id.toString())) {
+                linkedUsersMap.set(u.id.toString(), u.username.toLowerCase());
+              }
+            }
+
+            for (const msg of lMessages) {
+              if (isMessageTooOld(msg, dateFromSec)) { linkedReachedStart = true; break; }
+              linkedScanned += 1;
+              if (msg.fromId?.className === 'PeerUser') {
+                const userId = msg.fromId.userId.toString();
+                const uname = linkedUsersMap.get(userId);
+                if (uname && uname !== selfUsername) {
+                  const key = `username:${uname}`;
+                  const existing = found.get(key);
+                  if (existing) {
+                    existing.match_count += 1;
+                  } else {
+                    found.set(key, {
+                      contact_type: 'username',
+                      contact_value: uname,
+                      is_bot: isLikelyBotUsername(uname),
+                      message_id: msg.id,
+                      message_date: new Date(msg.date * 1000),
+                      message_excerpt: null,
+                      matched_keyword: 'comment_sender',
+                      match_count: 1,
+                    });
+                  }
+                }
+              }
+            }
+            if (linkedReachedStart || lMessages.length < PAGE_SIZE) break;
+            linkedOffsetId = lMessages[lMessages.length - 1].id;
+          }
+          scanned += linkedScanned;
+        }
+      }
+    } catch (err) {
+      // Linked discussion group yo'q yoki kirish mumkin emas — jim o'tamiz
+      console.warn('[scan] linked discussion group skanerlashda xato:', err.message);
+    }
   }
 
   return {

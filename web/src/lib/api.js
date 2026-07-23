@@ -153,6 +153,31 @@ export function exportScanSessionCsvUrl(id) {
   return `${API_URL}/api/scan/sessions/${id}/export.csv`;
 }
 
+export function exportScanSessionXlsxUrl(id) {
+  return `${API_URL}/api/scan/sessions/${id}/export.xlsx`;
+}
+
+// Guruh/kanal a'zolarini XLSX faylga eksport qilish.
+// Javob to'g'ridan-to'g'ri .xlsx blob — fetch + download trigger kerak.
+export async function exportParticipants(identifier) {
+  const baseUrl = PIPELINE_API_URL;
+  const res = await fetch(`${baseUrl}/api/scan/participants`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `So'rov xatosi: ${res.status}`);
+  }
+  // Blob qaytaramiz — chaqiruvchi tomonida download trigger qilinadi
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') || '';
+  const match = cd.match(/filename="([^"]+)"/);
+  const filename = match ? match[1] : `group-users.xlsx`;
+  return { blob, filename };
+}
+
 export default {
   fetchLeads,
   fetchStats,
@@ -177,5 +202,7 @@ export default {
   fetchScanSession,
   deleteScanSession,
   exportScanSessionCsvUrl,
+  exportScanSessionXlsxUrl,
+  exportParticipants,
   promoteSessionToLead,
 };
