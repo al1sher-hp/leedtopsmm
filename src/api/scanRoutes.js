@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { ScanSession, ScanResult } from '../db/models.js';
+import { Lead, ScanSession, ScanResult } from '../db/models.js';
 import { parseIdentifier } from '../blacklist/blacklist.js';
 import { sanitizeKeywords, MAX_KEYWORDS } from '../utils/keywords.js';
 
@@ -154,6 +154,8 @@ router.post('/run', async (req, res) => {
     });
   }
 
+  const captureSenders = req.body?.captureSenders === true;
+
   scanState.running = true;
   scanState.startedAt = new Date().toISOString();
   scanState.finishedAt = null;
@@ -162,7 +164,7 @@ router.post('/run', async (req, res) => {
 
   const { runChannelScan } = await import('../jobs/runChannelScan.js');
 
-  runChannelScan({ identifier, dateFromSec, dateToSec, keywords })
+  runChannelScan({ identifier, dateFromSec, dateToSec, keywords, captureSenders })
     .then((stats) => {
       scanState.lastStats = stats;
       scanState.target = stats.target || scanState.target;
@@ -195,6 +197,71 @@ router.post('/cancel', async (req, res) => {
 
 router.get('/status', (req, res) => {
   res.json({ state: scanState });
+});
+
+/**
+ * Kanal skanerlash sessiyasini Lead'ga ko'chirish.
+ * Sessiyaning manbasi (kanal/guruh) Lead jadvaliga qo'shiladi yoki yangilanadi,
+ * skanerlashda topilgan telefon/username kontakt sifatida ishlatiladi.
+ */
+router.post('/sessions/:id/promote', async (req, res) => {
+  try {
+    const session = await ScanSession.findByPk(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Sessiya topilmadi' });
+    if (!session.source_channel_id) {
+      return res.status(400).json({ error: "Bu sessiyada kanal ma'lumoti yo'q" });
+    }
+
+    // Sessiya natijalaridan eng yaxshi kontaktni tanlaymiz (bot emas, ko'p uchraydigan)
+    const results = await ScanResult.findAll({
+      where: { scan_session_id: session.id },
+      order: [['match_count', 'DESC']],
+    });
+
+    const phoneResult = results.find((r) => r.contact_type === 'phone' && !r.is_bot);
+    const usernameResult = results.find((r) => r.contact_type === 'username' && !r.is_bot);
+
+    const phone = phoneResult?.contact_value || null;
+    const contactUsername = usernameResult?.contact_value || null;
+    let contactType = 'none';
+    if (phone && contactUsername) contactType = 'both';
+    else if (phone) contactType = 'phone';
+    else if (contactUsername) contactType = 'username';
+
+    const [lead, created] = await Lead.findOrCreate({
+      where: { channel_id: session.source_channel_id },
+      defaults: {
+        channel_title: session.source_title || session.source_username || "Noma'lum kanal",
+        channel_username: session.source_username || null,
+        channel_id: session.source_channel_id,
+        type: session.source_type || 'channel',
+        phone,
+        contact_username: contactUsername,
+        contact_type: contactType,
+        source: 'scan',
+      },
+    });
+
+    if (!created) {
+      // Mavjud leadga yangi topilgan kontaktni qo'shamiz (bo'sh bo'lgan maydonlarga)
+      const updates = {};
+      if (phone && !lead.phone) updates.phone = phone;
+      if (contactUsername && !lead.contact_username) updates.contact_username = contactUsername;
+      if (Object.keys(updates).length > 0) {
+        const newPhone = updates.phone || lead.phone;
+        const newUsername = updates.contact_username || lead.contact_username;
+        if (newPhone && newUsername) updates.contact_type = 'both';
+        else if (newPhone) updates.contact_type = 'phone';
+        else if (newUsername) updates.contact_type = 'username';
+        await lead.update(updates);
+      }
+    }
+
+    res.json({ lead, created });
+  } catch (err) {
+    console.error('[scan] POST /sessions/:id/promote xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
 });
 
 export default router;

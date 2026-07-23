@@ -9,6 +9,7 @@ import {
   fetchScanSession,
   deleteScanSession,
   exportScanSessionCsvUrl,
+  promoteSessionToLead,
 } from '../lib/api.js';
 
 // Telegram t.me/<username>/<id>?embed=1 — Telegram'ning o'z ochiq "post
@@ -85,6 +86,9 @@ export default function ChannelScanPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [keywords, setKeywords] = useState('');
+  const [captureSenders, setCaptureSenders] = useState(false);
+  const [promoting, setPromoting] = useState(false);
+  const [promoteResult, setPromoteResult] = useState(null);
 
   const [running, setRunning] = useState(false);
   const [lastStats, setLastStats] = useState(null);
@@ -127,6 +131,7 @@ export default function ChannelScanPage() {
   }, []);
 
   useEffect(() => {
+    setPromoteResult(null);
     if (selectedSessionId === null) {
       setSessionDetail(null);
       return;
@@ -167,12 +172,13 @@ export default function ChannelScanPage() {
   const handleStart = async () => {
     if (!canStart) return;
     setActionError(null);
+    setPromoteResult(null);
     const kw = keywords
       .split(',')
       .map((k) => k.trim())
       .filter(Boolean);
     try {
-      await runChannelScan({ identifier: identifier.trim(), dateFrom, dateTo, keywords: kw });
+      await runChannelScan({ identifier: identifier.trim(), dateFrom, dateTo, keywords: kw, captureSenders });
       setRunning(true);
       setLastStats(null);
       setLastError(null);
@@ -180,6 +186,20 @@ export default function ChannelScanPage() {
       pollStatus();
     } catch (err) {
       setActionError(err.message);
+    }
+  };
+
+  const handlePromote = async () => {
+    if (!selectedSessionId) return;
+    setPromoting(true);
+    setPromoteResult(null);
+    try {
+      const res = await promoteSessionToLead(selectedSessionId);
+      setPromoteResult({ success: true, created: res.created });
+    } catch (err) {
+      setPromoteResult({ success: false, error: err.message });
+    } finally {
+      setPromoting(false);
     }
   };
 
@@ -281,6 +301,19 @@ export default function ChannelScanPage() {
             />
           </div>
 
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={captureSenders}
+              onChange={(e) => setCaptureSenders(e.target.checked)}
+              disabled={running}
+              className="rounded border-gray-300 text-indigo-600"
+            />
+            <span className="text-xs text-gray-600">
+              Guruh xabari yuboruvchilarini ham yig' (havolalar va xabar yozgan userlar)
+            </span>
+          </label>
+
           <div className="flex items-center gap-3">
             {!running ? (
               <button
@@ -333,7 +366,14 @@ export default function ChannelScanPage() {
                       {sessionDetail.session.keywords ? ` — kalit so'z: ${sessionDetail.session.keywords}` : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={handlePromote}
+                      disabled={promoting}
+                      className="text-sm bg-indigo-600 text-white rounded-lg px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {promoting ? "Ko'chirilmoqda..." : "Lead'ga ko'chirish"}
+                    </button>
                     {sessionDetail.results.length > 0 && (
                       <a
                         href={exportScanSessionCsvUrl(selectedSessionId)}
@@ -349,6 +389,15 @@ export default function ChannelScanPage() {
                       Yopish
                     </button>
                   </div>
+                  {promoteResult && (
+                    <div className={`text-xs mt-1 ${promoteResult.success ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {promoteResult.success
+                        ? promoteResult.created
+                          ? "✓ Kanal Lead'lar ro'yxatiga qo'shildi"
+                          : "✓ Mavjud lead kontakt ma'lumotlari yangilandi"
+                        : `Xato: ${promoteResult.error}`}
+                    </div>
+                  )}
                 </div>
                 {sessionDetail.results.length === 0 ? (
                   <div className="text-xs text-gray-400">Bu skanerlashda kontakt topilmadi.</div>

@@ -54,10 +54,10 @@ function excerptOf(text) {
 /**
  * Bitta kanal/guruhning postlari/xabarlari matnidan (sana oralig'ida,
  * ixtiyoriy kalit so'z bilan filtrlab) ochiq yozilgan telefon/username'larni
- * yig'adi. Xabar yuboruvchisining o'zi (user_id/username) HECH QACHON
- * saqlanmaydi — faqat matn ichida odam o'zi ochiq yozgan kontakt.
+ * yig'adi. `captureSenders: true` bo'lsa guruh xabarlari yuboruvchilarining
+ * username'larini ham qo'shimcha yig'adi.
  */
-export async function scanChannel(pool, { identifier, dateFromSec, dateToSec, keywords = [] } = {}) {
+export async function scanChannel(pool, { identifier, dateFromSec, dateToSec, keywords = [], captureSenders = false } = {}) {
   const chat = await resolveChannelOrGroup(pool, identifier);
   const channelId = chat.id.toString();
 
@@ -69,6 +69,9 @@ export async function scanChannel(pool, { identifier, dateFromSec, dateToSec, ke
 
   const inputChannel = toInputChannel(chat);
   const found = new Map();
+  const selfUsername = (chat.username || '').toLowerCase();
+  // Xabar yuboruvchilar uchun: userId → username lug'ati (barcha sahifalar bo'yicha)
+  const usersMap = new Map();
   let offsetId = 0;
   let scanned = 0;
   let hitCap = false;
@@ -93,6 +96,15 @@ export async function scanChannel(pool, { identifier, dateFromSec, dateToSec, ke
     const messages = history.messages || [];
     if (messages.length === 0) break;
 
+    // Yuboruvchi username lug'atini yangilash (GetHistory users massividan)
+    if (captureSenders) {
+      for (const u of (history.users || [])) {
+        if (u.username && !usersMap.has(u.id.toString())) {
+          usersMap.set(u.id.toString(), u.username.toLowerCase());
+        }
+      }
+    }
+
     for (const msg of messages) {
       if (isMessageTooOld(msg, dateFromSec)) {
         reachedStart = true;
@@ -103,6 +115,31 @@ export async function scanChannel(pool, { identifier, dateFromSec, dateToSec, ke
         hitCap = true;
         break;
       }
+
+      // Guruh xabari yuboruvchisini yig' (sanadan qat'i nazar, kalit so'zsiz)
+      if (captureSenders && msg.fromId?.className === 'PeerUser') {
+        const userId = msg.fromId.userId.toString();
+        const uname = usersMap.get(userId);
+        if (uname && uname !== selfUsername) {
+          const key = `username:${uname}`;
+          const existing = found.get(key);
+          if (existing) {
+            existing.match_count += 1;
+          } else {
+            found.set(key, {
+              contact_type: 'username',
+              contact_value: uname,
+              is_bot: isLikelyBotUsername(uname),
+              message_id: msg.id,
+              message_date: new Date(msg.date * 1000),
+              message_excerpt: null,
+              matched_keyword: 'sender',
+              match_count: 1,
+            });
+          }
+        }
+      }
+
       if (!shouldIncludeMessage(msg, { dateFromSec, dateToSec, keywords })) continue;
 
       const text = msg.message || '';
@@ -129,7 +166,6 @@ export async function scanChannel(pool, { identifier, dateFromSec, dateToSec, ke
         }
       }
 
-      const selfUsername = (chat.username || '').toLowerCase();
       for (const uname of extractUsernames(text)) {
         if (uname === selfUsername) continue;
         const key = `username:${uname}`;

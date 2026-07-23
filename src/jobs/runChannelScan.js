@@ -10,7 +10,7 @@ import { scanCancellation } from './scanCancellation.js';
  * yozadi — turli skanerlashlar natijalari bir-biriga aralashmaydi, har biri
  * mustaqil ko'rish/yuklab olish/o'chirish mumkin bo'lgan "papka" bo'ladi.
  */
-export async function runChannelScan({ identifier, dateFromSec, dateToSec, keywords = [] }) {
+export async function runChannelScan({ identifier, dateFromSec, dateToSec, keywords = [], captureSenders = false }) {
   await sequelize.authenticate();
   scanCancellation.reset();
 
@@ -21,7 +21,7 @@ export async function runChannelScan({ identifier, dateFromSec, dateToSec, keywo
 
   let outcome;
   try {
-    outcome = await scanChannel(pool, { identifier, dateFromSec, dateToSec, keywords });
+    outcome = await scanChannel(pool, { identifier, dateFromSec, dateToSec, keywords, captureSenders });
   } catch (err) {
     if (err.isCancellation) {
       const session = await ScanSession.create({
