@@ -1,4 +1,4 @@
-import app, { setDbStatus } from './app.js';
+import app, { setDbStatus, startInboxMonitor } from './app.js';
 import config from '../config/index.js';
 import sequelize from '../db/index.js';
 import { closeStalePipelineRuns } from '../db/staleRuns.js';
@@ -11,9 +11,8 @@ async function start() {
     await sequelize.authenticate();
     console.log('[api] DB ulanishi OK');
     setDbStatus(true);
-    // Server oldingi ishga tushishda o'rtada qulagan bo'lsa, "osilib qolgan"
-    // pipeline yugurishlarini tozalaydi.
     await closeStalePipelineRuns().catch((err) => console.error('[api] osilib qolgan run tozalash xatosi:', err.message));
+    startInboxMonitor();
   } catch (err) {
     console.error('[api] DB ulanish xatosi:', err.message);
     setDbStatus(false);

@@ -28,3 +28,89 @@ are terminated then try again. If it still fails, a git process
 may have crashed in this repository earlier:
 remove the file manually to continue.
 Everything up-to-date
+warning: in the working copy of '.dockerignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.env.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'Dockerfile', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'api/index.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'deploy_fixes.vbs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docker-compose.yml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'git_push.vbs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'git_push_log.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/dev.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/api/app.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/api/blacklistRoutes.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/api/routes.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/api/scanRoutes.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/api/server.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/blacklist/blacklist.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/blacklist/verify.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/config/index.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/config/seeds.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/db/backfillContactIsBot.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/db/backfillOrphanLeadsRun.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/db/index.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/db/migrate.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/db/models.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/db/staleRuns.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/discovery/discovery.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/enrich/enrich.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/extract/phone.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/extract/username.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/jobs/cancellation.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/jobs/runChannelScan.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/jobs/runPipeline.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/jobs/scanCancellation.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/scan/channelScan.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/score/gemini.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/telegram/client.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/telegram/login.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/utils/keywords.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/blacklist.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/channelScan.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/client.backoff.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/keywords.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/phone.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/routes.buildWhere.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/routes.exportFields.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/routes.streamCsv.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/username.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'vercel.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/.dockerignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/.env.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/Dockerfile', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/index.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/nginx.conf', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/postcss.config.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/App.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/BlacklistPage.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/ChannelScanPage.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/ContactBadge.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/Filters.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/FolderSidebar.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/KeywordFilter.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/LeadCard.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/LeadTable.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/LeadsPage.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/Pagination.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/PipelineControl.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/SegmentBadge.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/StatsHeader.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/components/StatusDropdown.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/index.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/lib/api.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/lib/labels.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/src/main.jsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/tailwind.config.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web/vite.config.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'fix_and_push.vbs', LF will be replaced by CRLF the next time Git touches it
+[main d5f295d] feat: kanal izohlari + guruh azolari XLSX + scan XLSX
+ 10 files changed, 494 insertions(+), 50 deletions(-)
+ create mode 100644 fix_and_push.vbs
+To https://github.com/al1sher-hp/leedtopsmm.git
+   79ead8f..d5f295d  main -> main

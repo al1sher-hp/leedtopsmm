@@ -178,6 +178,69 @@ export async function exportParticipants(identifier) {
   return { blob, filename };
 }
 
+// ─── Outreach: Akkountlar ─────────────────────────────────────────────────────
+export function fetchAccounts() {
+  return request('/api/outreach/accounts', {}, PIPELINE_API_URL);
+}
+export function addAccount(data) {
+  return request('/api/outreach/accounts', { method: 'POST', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+export function verifyAccount(id) {
+  return request(`/api/outreach/accounts/${id}/verify`, { method: 'POST' }, PIPELINE_API_URL);
+}
+export function updateAccount(id, data) {
+  return request(`/api/outreach/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+export function deleteAccount(id) {
+  return request(`/api/outreach/accounts/${id}`, { method: 'DELETE' }, PIPELINE_API_URL);
+}
+
+// ─── Outreach: Kampaniyalar ───────────────────────────────────────────────────
+export function fetchCampaigns() {
+  return request('/api/outreach/campaigns', {}, PIPELINE_API_URL);
+}
+export function fetchCampaign(id) {
+  return request(`/api/outreach/campaigns/${id}`, {}, PIPELINE_API_URL);
+}
+export function createCampaign(data) {
+  return request('/api/outreach/campaigns', { method: 'POST', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+export function updateCampaign(id, data) {
+  return request(`/api/outreach/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+export function deleteCampaign(id) {
+  return request(`/api/outreach/campaigns/${id}`, { method: 'DELETE' }, PIPELINE_API_URL);
+}
+export function startCampaign(id) {
+  return request(`/api/outreach/campaigns/${id}/start`, { method: 'POST' }, PIPELINE_API_URL);
+}
+export function pauseCampaign(id) {
+  return request(`/api/outreach/campaigns/${id}/pause`, { method: 'POST' }, PIPELINE_API_URL);
+}
+export function addTargets(campaignId, data) {
+  return request(`/api/outreach/campaigns/${campaignId}/targets`, { method: 'POST', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+export function fetchTargets(campaignId, params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return request(`/api/outreach/campaigns/${campaignId}/targets${q ? `?${q}` : ''}`, {}, PIPELINE_API_URL);
+}
+export function fetchReplies(campaignId, params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return request(`/api/outreach/campaigns/${campaignId}/replies${q ? `?${q}` : ''}`, {}, PIPELINE_API_URL);
+}
+export function markReplyRead(campaignId, replyId) {
+  return request(`/api/outreach/campaigns/${campaignId}/replies/${replyId}/read`, { method: 'PATCH' }, PIPELINE_API_URL);
+}
+export function respondToReply(campaignId, replyId, text) {
+  return request(`/api/outreach/campaigns/${campaignId}/replies/${replyId}/respond`, { method: 'POST', body: JSON.stringify({ text }) }, PIPELINE_API_URL);
+}
+export function triggerInboxCheck(campaignId) {
+  return request(`/api/outreach/campaigns/${campaignId}/check-replies`, { method: 'POST' }, PIPELINE_API_URL);
+}
+export function fetchWorkerStatus() {
+  return request('/api/outreach/worker', {}, PIPELINE_API_URL);
+}
+
 export default {
   fetchLeads,
   fetchStats,

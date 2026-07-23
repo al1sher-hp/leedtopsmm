@@ -5,6 +5,8 @@ import config from '../config/index.js';
 import routes from './routes.js';
 import blacklistRoutes from './blacklistRoutes.js';
 import scanRoutes from './scanRoutes.js';
+import outreachRoutes from './outreachRoutes.js';
+import { startMonitor } from '../outreach/inboxMonitor.js';
 
 const app = express();
 
@@ -26,7 +28,16 @@ app.use(cors({ origin: config.api.corsOrigin }));
 app.use(express.json({ limit: '100kb' }));
 app.use('/api/blacklist', blacklistRoutes);
 app.use('/api/scan', scanRoutes);
+app.use('/api/outreach', outreachRoutes);
 app.use('/api', routes);
+
+// Inbox monitorini server.js (doim ishlaydigan) ichida ishga tushirish —
+// Vercel'da bu import zanjirida qoladi lekin `start()` chaqirilmaydi,
+// shuning uchun setInterval real Vercel funksiyasida hech qachon tugamaydi.
+// Persistent server uchun: server.js'dan setDbStatus(true) chaqirilgach monitor ham boshlanadi.
+export function startInboxMonitor() {
+  startMonitor(5 * 60_000); // har 5 daqiqa
+}
 app.get('/health', (req, res) => res.json({ ok: dbOk, db: dbOk }));
 
 // Global xato handler — yuqoridagi route'lardan birortasida kutilmagan

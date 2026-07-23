@@ -403,4 +403,105 @@ PipelineRunLead.init(
   }
 );
 
-export default { Lead, BlacklistEntry, ScanSession, ScanResult, PipelineRun, PipelineRunLead };
+// ─── Outreach: Telegram akkauntlari ─────────────────────────────────────────
+export class TelegramAccount extends Model {}
+TelegramAccount.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    phone: { type: DataTypes.STRING, allowNull: true },
+    session_string: { type: DataTypes.TEXT, allowNull: false },
+    label: { type: DataTypes.STRING, allowNull: true },
+    status: {
+      type: DataTypes.ENUM('active', 'banned', 'limited', 'unverified'),
+      allowNull: false,
+      defaultValue: 'unverified',
+    },
+    messages_today: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    last_reset_at: { type: DataTypes.DATE, allowNull: true },
+    daily_limit: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 40 },
+  },
+  { sequelize, modelName: 'TelegramAccount', tableName: 'telegram_accounts' }
+);
+
+// ─── Outreach: Kampaniyalar ──────────────────────────────────────────────────
+export class Campaign extends Model {}
+Campaign.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    name: { type: DataTypes.STRING, allowNull: false },
+    message_text: { type: DataTypes.TEXT, allowNull: false },
+    message_type: {
+      type: DataTypes.ENUM('text', 'image_text', 'video_text'),
+      allowNull: false,
+      defaultValue: 'text',
+    },
+    ai_auto_reply: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    ai_reply_prompt: { type: DataTypes.TEXT, allowNull: true },
+    status: {
+      type: DataTypes.ENUM('draft', 'running', 'paused', 'completed'),
+      allowNull: false,
+      defaultValue: 'draft',
+    },
+    total_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    sent_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    failed_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    replied_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+  },
+  { sequelize, modelName: 'Campaign', tableName: 'campaigns' }
+);
+
+// ─── Outreach: Kampaniya maqsadlari ─────────────────────────────────────────
+export class CampaignTarget extends Model {}
+CampaignTarget.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    campaign_id: { type: DataTypes.INTEGER, allowNull: false },
+    contact_type: { type: DataTypes.ENUM('phone', 'username'), allowNull: false },
+    contact_value: { type: DataTypes.STRING, allowNull: false },
+    status: {
+      type: DataTypes.ENUM('pending', 'sent', 'failed', 'replied'),
+      allowNull: false,
+      defaultValue: 'pending',
+    },
+    tg_message_id: { type: DataTypes.BIGINT, allowNull: true },
+    tg_peer_id: { type: DataTypes.STRING, allowNull: true },
+    sent_at: { type: DataTypes.DATE, allowNull: true },
+    error_message: { type: DataTypes.TEXT, allowNull: true },
+  },
+  {
+    sequelize,
+    modelName: 'CampaignTarget',
+    tableName: 'campaign_targets',
+    indexes: [{ unique: true, fields: ['campaign_id', 'contact_type', 'contact_value'] }],
+  }
+);
+
+// ─── Outreach: Kampaniyaga kelgan javoblar ───────────────────────────────────
+export class CampaignReply extends Model {}
+CampaignReply.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    campaign_id: { type: DataTypes.INTEGER, allowNull: false },
+    campaign_target_id: { type: DataTypes.INTEGER, allowNull: false },
+    from_user_id: { type: DataTypes.STRING, allowNull: true },
+    from_username: { type: DataTypes.STRING, allowNull: true },
+    message_text: { type: DataTypes.TEXT, allowNull: true },
+    tg_message_id: { type: DataTypes.BIGINT, allowNull: true },
+    received_at: { type: DataTypes.DATE, allowNull: false },
+    is_read: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    ai_suggested_reply: { type: DataTypes.TEXT, allowNull: true },
+    replied: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    replied_at: { type: DataTypes.DATE, allowNull: true },
+  },
+  {
+    sequelize,
+    modelName: 'CampaignReply',
+    tableName: 'campaign_replies',
+    indexes: [{ unique: true, fields: ['campaign_target_id', 'tg_message_id'] }],
+  }
+);
+
+export default {
+  Lead, BlacklistEntry, ScanSession, ScanResult, PipelineRun, PipelineRunLead,
+  TelegramAccount, Campaign, CampaignTarget, CampaignReply,
+};
