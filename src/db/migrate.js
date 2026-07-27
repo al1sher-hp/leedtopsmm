@@ -1,5 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sequelize from './index.js';
 import './models.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MIGRATIONS_DIR = path.join(__dirname, '..', '..', 'migrations');
 
 // sync({ alter: true }) modeldagi yangi ustun/jadval/indexlarni qo'shadi,
 // lekin modelda endi yo'q bo'lgan ESKI indexlarni o'zi olib tashlamaydi —
@@ -62,6 +68,24 @@ async function setupTrigramSearch() {
   }
 }
 
+// `migrations/`dagi qo'lda yozilgan SQL fayllarni (raqam bo'yicha tartiblab)
+// ishga tushiradi — Sequelize sync() faqat model-asosli jadvallarni
+// boshqaradi, trigger/VIEW/CHECK kabi narsalar shu yerda qo'lda qo'llaniladi.
+// Har bir fayl IF NOT EXISTS / CREATE OR REPLACE / ON CONFLICT bilan yozilgan,
+// shuning uchun qayta ishga tushirish (toza yoki mavjud bazada) xavfsiz.
+async function runSqlMigrations() {
+  if (!fs.existsSync(MIGRATIONS_DIR)) return;
+  const files = fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
+  for (const file of files) {
+    const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
+    console.log(`[migrate] SQL migratsiya: ${file}`);
+    await sequelize.query(sql);
+  }
+}
+
 async function migrate() {
   try {
     await sequelize.authenticate();
@@ -76,6 +100,7 @@ async function migrate() {
     await dropDuplicateUniqueConstraints('blacklist_entries', 'target_id');
 
     await setupTrigramSearch();
+    await runSqlMigrations();
 
     console.log('[migrate] Jadval(lar) sinxronlandi');
     process.exit(0);
