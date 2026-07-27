@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import config from '../config/index.js';
+import sequelize from '../db/index.js';
+import { checkRequiredTables } from '../db/health.js';
 import routes from './routes.js';
 import blacklistRoutes from './blacklistRoutes.js';
 import scanRoutes from './scanRoutes.js';
@@ -10,16 +12,6 @@ import groupLeadsRoutes from './groupLeadsRoutes.js';
 import { startMonitor } from '../outreach/inboxMonitor.js';
 
 const app = express();
-
-// So'nggi ma'lum DB ulanish holati — server.js (persistent entrypoint)
-// DB authenticate() natijasiga qarab shuni yangilaydi, /health shuni aks
-// ettiradi. Eslatma: Vercel serverless'da (api/index.js) bu hech qachon
-// chaqirilmaydi — har so'rov mustaqil bo'lgani uchun bu flag u yerda
-// ma'noli emas, faqat doim ishlaydigan (server.js) entrypoint uchun.
-let dbOk = false;
-export function setDbStatus(ok) {
-  dbOk = ok;
-}
 
 app.use(helmet());
 app.use(cors({ origin: config.api.corsOrigin }));
@@ -36,11 +28,26 @@ app.use('/api', routes);
 // Inbox monitorini server.js (doim ishlaydigan) ichida ishga tushirish —
 // Vercel'da bu import zanjirida qoladi lekin `start()` chaqirilmaydi,
 // shuning uchun setInterval real Vercel funksiyasida hech qachon tugamaydi.
-// Persistent server uchun: server.js'dan setDbStatus(true) chaqirilgach monitor ham boshlanadi.
 export function startInboxMonitor() {
   startMonitor(5 * 60_000); // har 5 daqiqa
 }
-app.get('/health', (req, res) => res.json({ ok: dbOk, db: dbOk }));
+
+// Har chaqiriqda haqiqiy tekshiruv (oldingi versiya faqat server.js
+// (doim ishlaydigan entrypoint) yangilagan keshlangan bayroqni qaytarardi
+// — Vercel serverless'da (api/index.js) bu hech qachon yangilanmagani
+// uchun /health u yerda doim `ok:false` qaytarardi, DB holatidan qat'i
+// nazar). `missing` — "relation ... does not exist" xatosining aynan
+// qaysi jadval(lar) yo'qligidan kelib chiqayotganini ko'rsatadi (masalan
+// `npm run migrate` boshqa DATABASE_URL'ga qarshi ishga tushirilgan bo'lsa).
+app.get('/health', async (req, res) => {
+  try {
+    await sequelize.authenticate();
+    const tables = await checkRequiredTables();
+    res.status(tables.ok ? 200 : 500).json({ ok: tables.ok, db: true, ...tables });
+  } catch (err) {
+    res.status(500).json({ ok: false, db: false, error: err.message });
+  }
+});
 
 // Global xato handler — yuqoridagi route'lardan birortasida kutilmagan
 // (try/catch qamrab olmagan) xato tashlansa ham, oqim (masalan CSV eksport)
