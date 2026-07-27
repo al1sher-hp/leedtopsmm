@@ -50,6 +50,12 @@ export const config = {
     cacheTtlDays: toInt(process.env.LOOKUP_CACHE_TTL_DAYS, 30),
     rawRetentionDays: toInt(process.env.LOOKUP_RAW_RETENTION_DAYS, 7),
   },
+  groupLeads: {
+    // POST /api/group-leads/sync shu qiymat bilan himoyalangan (Vercel cron
+    // so'rovi shuni yuboradi) — bo'sh bo'lsa endpoint hech qachon ishlamaydi
+    // (login/API kalitsiz tashqi tomondan chaqirib yuborilmasligi uchun).
+    cronSecret: process.env.CRON_SECRET || '',
+  },
 };
 
 export default config;
