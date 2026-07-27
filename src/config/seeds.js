@@ -35,4 +35,10 @@ export const UZ_OPERATOR_CODES = [
   '33', '88', '77', '20', '50',
 ];
 
-export default { SEARCH_KEYWORDS, CATALOG_CHANNELS, UZ_OPERATOR_CODES };
+// "Guruh lead'lar" moduli uchun ixtiyoriy kalit so'z filtri — bo'sh
+// qoldirilsa (standart holat) telefon topilgan HAR BIR xabar/komment
+// yig'iladi (filtrsiz). To'ldirilsa, faqat shu so'zlardan birini o'z ichiga
+// olgan xabarlar ko'rib chiqiladi (qarang: src/lib/ingest.js).
+export const GROUP_LEAD_KEYWORDS = [];
+
+export default { SEARCH_KEYWORDS, CATALOG_CHANNELS, UZ_OPERATOR_CODES, GROUP_LEAD_KEYWORDS };
