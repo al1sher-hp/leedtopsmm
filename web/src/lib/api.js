@@ -249,6 +249,37 @@ export function lookupPhone(username) {
   }, PIPELINE_API_URL);
 }
 
+// ─── Guruh lead'lar (ochiq kanal post/komment yig'uvchi) ──────────────────────
+export function fetchGroupLeadSources() {
+  return request('/api/sources');
+}
+
+export function createGroupLeadSource(data) {
+  return request('/api/sources', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function fetchGroupLeads(params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return request(`/api/group-leads${q ? `?${q}` : ''}`);
+}
+
+export function fetchGroupLeadStats() {
+  return request('/api/group-leads/stats');
+}
+
+// `secret` — operator qo'lda kiritgan CRON_SECRET (hech qachon build'ga
+// yozilmaydi/saqlanmaydi, faqat shu so'rov header'ida yuboriladi).
+export function syncGroupLeadSources(secret) {
+  return request('/api/group-leads/sync', {
+    method: 'POST',
+    headers: secret ? { 'x-cron-secret': secret } : undefined,
+  });
+}
+
+export function groupLeadsExportUrl(hashed) {
+  return `${API_URL}/api/group-leads/export${hashed ? '?hashed=1' : ''}`;
+}
+
 export default {
   fetchLeads,
   fetchStats,
@@ -276,4 +307,10 @@ export default {
   exportScanSessionXlsxUrl,
   exportParticipants,
   promoteSessionToLead,
+  fetchGroupLeadSources,
+  createGroupLeadSource,
+  fetchGroupLeads,
+  fetchGroupLeadStats,
+  syncGroupLeadSources,
+  groupLeadsExportUrl,
 };

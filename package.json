@@ -18,12 +18,14 @@
     "api:dev": "node --watch src/api/server.js",
     "web": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
+    "build": "npm run web:build",
     "dev": "node scripts/dev.js",
     "test": "vitest run",
     "postinstall": "npm --prefix web install"
   },
   "dependencies": {
     "@google/genai": "^2.13.0",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
