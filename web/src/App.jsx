@@ -7,17 +7,19 @@ import AccountsPage from './components/AccountsPage.jsx';
 import PhoneLookupPage from './components/PhoneLookupPage.jsx';
 import FoldersPage from './components/FoldersPage.jsx';
 import DialogsPage from './components/DialogsPage.jsx';
+import GroupLeadsPage from './components/GroupLeadsPage.jsx';
 import { fetchHealth } from './lib/api.js';
 
 const TABS = [
-  { id: 'leads',     label: "Lead'lar" },
-  { id: 'scan',      label: 'Kanal qidiruv' },
-  { id: 'campaigns', label: '📢 Kampaniyalar' },
-  { id: 'accounts',  label: '👤 Akkountlar' },
-  { id: 'lookup',    label: '📞 Nomer topish' },
-  { id: 'folders',   label: '📁 Jildlar' },
-  { id: 'dialogs',   label: '💬 Lichka' },
-  { id: 'blacklist', label: "Qora ro'yxat" },
+  { id: 'leads',       label: "Lead'lar" },
+  { id: 'scan',        label: 'Kanal qidiruv' },
+  { id: 'group-leads', label: "Guruh lead'lar" },
+  { id: 'campaigns',   label: '📢 Kampaniyalar' },
+  { id: 'accounts',    label: '👤 Akkountlar' },
+  { id: 'lookup',      label: '📞 Nomer topish' },
+  { id: 'folders',     label: '📁 Jildlar' },
+  { id: 'dialogs',     label: '💬 Lichka' },
+  { id: 'blacklist',   label: "Qora ro'yxat" },
 ];
 
 export default function App() {
@@ -57,13 +59,14 @@ export default function App() {
       </header>
 
       <main className="max-w-[1800px] mx-auto px-4 mt-4 flex flex-col gap-4">
-        {view === 'blacklist'  ? <BlacklistPage />    :
-         view === 'scan'       ? <ChannelScanPage /> :
-         view === 'campaigns'  ? <CampaignsPage />   :
-         view === 'accounts'   ? <AccountsPage />    :
-         view === 'lookup'     ? <PhoneLookupPage /> :
-         view === 'folders'    ? <FoldersPage />     :
-         view === 'dialogs'    ? <DialogsPage />     :
+        {view === 'blacklist'   ? <BlacklistPage />    :
+         view === 'scan'        ? <ChannelScanPage /> :
+         view === 'group-leads' ? <GroupLeadsPage />  :
+         view === 'campaigns'   ? <CampaignsPage />   :
+         view === 'accounts'    ? <AccountsPage />    :
+         view === 'lookup'      ? <PhoneLookupPage /> :
+         view === 'folders'     ? <FoldersPage />     :
+         view === 'dialogs'     ? <DialogsPage />     :
          <LeadsPage />}
       </main>
     </div>
