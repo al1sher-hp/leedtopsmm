@@ -4,12 +4,14 @@ import BlacklistPage from './components/BlacklistPage.jsx';
 import ChannelScanPage from './components/ChannelScanPage.jsx';
 import CampaignsPage from './components/CampaignsPage.jsx';
 import AccountsPage from './components/AccountsPage.jsx';
+import PhoneLookupPage from './components/PhoneLookupPage.jsx';
 
 const TABS = [
   { id: 'leads',     label: "Lead'lar" },
   { id: 'scan',      label: 'Kanal qidiruv' },
   { id: 'campaigns', label: '📢 Kampaniyalar' },
   { id: 'accounts',  label: '👤 Akkountlar' },
+  { id: 'lookup',    label: '📞 Nomer topish' },
   { id: 'blacklist', label: "Qora ro'yxat" },
 ];
 
@@ -36,10 +38,11 @@ export default function App() {
       </header>
 
       <main className="max-w-[1800px] mx-auto px-4 mt-4 flex flex-col gap-4">
-        {view === 'blacklist'  ? <BlacklistPage />  :
+        {view === 'blacklist'  ? <BlacklistPage />    :
          view === 'scan'       ? <ChannelScanPage /> :
-         view === 'campaigns'  ? <CampaignsPage />  :
-         view === 'accounts'   ? <AccountsPage />   :
+         view === 'campaigns'  ? <CampaignsPage />   :
+         view === 'accounts'   ? <AccountsPage />    :
+         view === 'lookup'     ? <PhoneLookupPage /> :
          <LeadsPage />}
       </main>
     </div>

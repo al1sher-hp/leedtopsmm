@@ -501,7 +501,58 @@ CampaignReply.init(
   }
 );
 
+// Qo'lda @username orqali telefon qidiruvi natijalari — ScanResult'dan farqli,
+// haqiqiy skanerlangan kanal/guruhga bog'liq emas (source_channel_id/source_type
+// yo'q), shuning uchun alohida jadval: kanal-skanerlash statistikasi/eksportlariga
+// aralashib ketmaydi.
+export class PhoneLookup extends Model {}
+
+PhoneLookup.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    contact_type: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'username',
+    },
+    contact_value: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    phone: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    tg_user_id: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    first_name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    last_name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    is_bot: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'PhoneLookup',
+    tableName: 'phone_lookups',
+  }
+);
+
 export default {
   Lead, BlacklistEntry, ScanSession, ScanResult, PipelineRun, PipelineRunLead,
-  TelegramAccount, Campaign, CampaignTarget, CampaignReply,
+  TelegramAccount, Campaign, CampaignTarget, CampaignReply, PhoneLookup,
 };

@@ -7,7 +7,7 @@ import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import config from '../config/index.js';
 import {
-  TelegramAccount, Campaign, CampaignTarget, CampaignReply, ScanResult,
+  TelegramAccount, Campaign, CampaignTarget, CampaignReply, ScanResult, PhoneLookup,
 } from '../db/models.js';
 import { startCampaign, pauseCampaign, getWorkerStatus } from '../outreach/messagingWorker.js';
 import { checkAllReplies } from '../outreach/inboxMonitor.js';
@@ -404,6 +404,72 @@ router.post('/campaigns/:id/check-replies', async (req, res) => {
 // GET /api/outreach/worker — worker holati
 router.get('/worker', (req, res) => {
   res.json(getWorkerStatus());
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// NOMER QIDIRISH
+// ════════════════════════════════════════════════════════════════════════════
+
+// POST /api/outreach/lookup-phone  { username: "@someuser" | "someuser" }
+// GramJS getEntity orqali user'ni topadi; `phone` maxfiylik sozlamalariga
+// qarab ko'p hollarda bo'sh (null) qaytadi — bu xato emas, kutilgan holat.
+router.post('/lookup-phone', async (req, res) => {
+  try {
+    const { username } = req.body || {};
+    if (!username?.trim()) {
+      return res.status(400).json({ error: 'username majburiy' });
+    }
+    const query = username.trim().replace(/^@/, '');
+
+    const account = await TelegramAccount.findOne({ where: { status: 'active' } });
+    if (!account) {
+      return res.status(400).json({ error: "Aktiv Telegram akkount yo'q. Avval akkount qo'shing va verify qiling." });
+    }
+
+    const client = new TelegramClient(
+      new StringSession(account.session_string),
+      config.telegram.apiId,
+      config.telegram.apiHash,
+      { connectionRetries: 2 }
+    );
+    await client.connect();
+    try {
+      let entity;
+      try {
+        entity = await client.getEntity(query);
+      } catch (err) {
+        return res.status(404).json({ error: 'Foydalanuvchi topilmadi', detail: err.message });
+      }
+
+      const phone = entity.phone ? `+${entity.phone}` : null;
+      const result = {
+        username: entity.username || query,
+        user_id: entity.id?.toString() || null,
+        first_name: entity.firstName || null,
+        last_name: entity.lastName || null,
+        phone,
+        is_bot: entity.bot || false,
+        ...(phone ? {} : { message: 'Raqam yashirilgan' }),
+      };
+
+      await PhoneLookup.create({
+        contact_type: 'username',
+        contact_value: query.toLowerCase(),
+        phone,
+        tg_user_id: result.user_id,
+        first_name: result.first_name,
+        last_name: result.last_name,
+        is_bot: result.is_bot,
+      });
+
+      res.json({ data: result });
+    } finally {
+      await client.disconnect();
+    }
+  } catch (err) {
+    console.error('[outreach] lookup-phone xato:', err);
+    res.status(500).json({ error: err.message || 'Server xatosi' });
+  }
 });
 
 export default router;

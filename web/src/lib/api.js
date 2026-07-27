@@ -241,6 +241,14 @@ export function fetchWorkerStatus() {
   return request('/api/outreach/worker', {}, PIPELINE_API_URL);
 }
 
+// ─── Nomer qidirish ───────────────────────────────────────────────────────────
+export function lookupPhone(username) {
+  return request('/api/outreach/lookup-phone', {
+    method: 'POST',
+    body: JSON.stringify({ username }),
+  }, PIPELINE_API_URL);
+}
+
 export default {
   fetchLeads,
   fetchStats,
