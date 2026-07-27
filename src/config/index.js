@@ -35,6 +35,12 @@ export const config = {
     port: toInt(process.env.PORT, 4000),
     corsOrigin: process.env.CORS_ORIGIN || '*',
   },
+  groupLeads: {
+    // POST /api/group-leads/sync shu qiymat bilan himoyalangan (Vercel cron
+    // so'rovi shuni yuboradi) — bo'sh bo'lsa endpoint hech qachon ishlamaydi
+    // (login/API kalitsiz tashqi tomondan chaqirib yuborilmasligi uchun).
+    cronSecret: process.env.CRON_SECRET || '',
+  },
 };
 
 export default config;

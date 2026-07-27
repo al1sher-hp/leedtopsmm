@@ -6,6 +6,7 @@ import routes from './routes.js';
 import blacklistRoutes from './blacklistRoutes.js';
 import scanRoutes from './scanRoutes.js';
 import outreachRoutes from './outreachRoutes.js';
+import groupLeadsRoutes from './groupLeadsRoutes.js';
 import { startMonitor } from '../outreach/inboxMonitor.js';
 
 const app = express();
@@ -29,6 +30,7 @@ app.use(express.json({ limit: '100kb' }));
 app.use('/api/blacklist', blacklistRoutes);
 app.use('/api/scan', scanRoutes);
 app.use('/api/outreach', outreachRoutes);
+app.use('/api', groupLeadsRoutes);
 app.use('/api', routes);
 
 // Inbox monitorini server.js (doim ishlaydigan) ichida ishga tushirish —
