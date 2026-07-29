@@ -517,7 +517,10 @@ router.post('/accounts/create/2fa', async (req, res) => {
     const { client, phone } = pending;
 
     try {
-      await client.checkPassword(password.trim());
+      await client.signInWithPassword(
+        { apiId: config.telegram.apiId, apiHash: config.telegram.apiHash },
+        { password: async () => password.trim(), onError: (e) => { throw e; } }
+      );
     } catch (err) {
       return res.status(400).json({ error: err.message?.includes('PASSWORD_HASH_INVALID') ? 'Parol noto\'g\'ri' : err.message });
     }
