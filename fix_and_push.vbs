@@ -7,7 +7,7 @@ objShell.Run "cmd /c del /f /q ""D:\leedtopsmm\.git\index.lock"" 2>nul", 0, True
 
 ' Git operatsiyalar
 objShell.Run "cmd /c cd /d D:\leedtopsmm && git add -A >> """ & log & """ 2>&1", 0, True
-objShell.Run "cmd /c cd /d D:\leedtopsmm && git commit -m ""feat: @username orqali telefon nomer qidirish (PhoneLookup jadvali + /api/outreach/lookup-phone endpoint)"" >> """ & log & """ 2>&1", 0, True
+objShell.Run "cmd /c cd /d D:\leedtopsmm && git commit -m ""feat: bulk phone lookup + account creation wizard (telefon orqali akkount qo'shish, ko'plab username nomer eksport)"" >> """ & log & """ 2>&1", 0, True
 objShell.Run "cmd /c cd /d D:\leedtopsmm && git push >> """ & log & """ 2>&1", 1, True
 
 MsgBox "Tayyor! Log: " & log, 0, "Done"

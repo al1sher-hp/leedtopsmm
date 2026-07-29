@@ -3,7 +3,7 @@
 
 import { Router } from 'express';
 import { Op, fn, col } from 'sequelize';
-import { TelegramClient } from 'telegram';
+import { TelegramClient, Api } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import config from '../config/index.js';
 import {
@@ -407,6 +407,142 @@ router.get('/worker', (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// AKKOUNT YARATISH WIZARD (ketma-ket: telefon → kod → 2FA)
+// ════════════════════════════════════════════════════════════════════════════
+
+// In-memory: yarim yaratilgan sessiyalarni saqlash (server restart'da tozalanadi)
+const pendingSessions = new Map();
+
+// POST /api/outreach/accounts/create/start { phone }
+// Telegramga kod jo'natadi, session_id qaytaradi
+router.post('/accounts/create/start', async (req, res) => {
+  try {
+    const { phone } = req.body || {};
+    if (!phone?.trim()) return res.status(400).json({ error: 'phone majburiy' });
+    const cleanPhone = phone.trim().replace(/\s/g, '');
+
+    const client = new TelegramClient(
+      new StringSession(''),
+      config.telegram.apiId,
+      config.telegram.apiHash,
+      { connectionRetries: 3 }
+    );
+    await client.connect();
+
+    let sendResult;
+    try {
+      sendResult = await client.sendCode({ apiId: config.telegram.apiId, apiHash: config.telegram.apiHash }, cleanPhone);
+    } catch (err) {
+      await client.disconnect();
+      return res.status(400).json({ error: err.message || 'Kod yuborishda xato' });
+    }
+
+    const sessionId = `${cleanPhone}_${Date.now()}`;
+    pendingSessions.set(sessionId, { client, phone: cleanPhone, phoneCodeHash: sendResult.phoneCodeHash });
+
+    // 10 daqiqadan keyin avtomatik tozalash
+    setTimeout(() => {
+      const s = pendingSessions.get(sessionId);
+      if (s) { s.client.disconnect().catch(() => {}); pendingSessions.delete(sessionId); }
+    }, 10 * 60_000);
+
+    res.json({ ok: true, session_id: sessionId, phone: cleanPhone });
+  } catch (err) {
+    console.error('[wizard] start xato:', err);
+    res.status(500).json({ error: err.message || 'Server xatosi' });
+  }
+});
+
+// POST /api/outreach/accounts/create/confirm { session_id, code }
+// Kodni tekshiradi; 2FA kerak bo'lsa needs_2fa: true qaytaradi
+router.post('/accounts/create/confirm', async (req, res) => {
+  try {
+    const { session_id, code } = req.body || {};
+    if (!session_id || !code?.trim()) return res.status(400).json({ error: 'session_id va code majburiy' });
+
+    const pending = pendingSessions.get(session_id);
+    if (!pending) return res.status(400).json({ error: 'Sessiya topilmadi yoki muddati o\'tgan. Qaytadan boshlang.' });
+
+    const { client, phone, phoneCodeHash } = pending;
+
+    try {
+      await client.invoke(
+        new Api.auth.SignIn({
+          phoneNumber: phone,
+          phoneCodeHash,
+          phoneCode: code.trim(),
+        })
+      );
+    } catch (err) {
+      if (err.message?.includes('SESSION_PASSWORD_NEEDED')) {
+        pending.needs2fa = true;
+        return res.json({ ok: true, needs_2fa: true });
+      }
+      if (err.message?.includes('PHONE_CODE_INVALID') || err.message?.includes('PHONE_CODE_EXPIRED')) {
+        return res.status(400).json({ error: 'Kod noto\'g\'ri yoki muddati o\'tgan' });
+      }
+      return res.status(400).json({ error: err.message || 'Tasdiqlashda xato' });
+    }
+
+    // Muvaffaqiyat — session saqlash
+    const sessionString = client.session.save();
+    const me = await client.getMe();
+    await client.disconnect();
+    pendingSessions.delete(session_id);
+
+    const acc = await TelegramAccount.create({
+      phone: me.phone ? `+${me.phone}` : phone,
+      session_string: sessionString,
+      label: me.firstName || null,
+      daily_limit: 40,
+      status: 'active',
+    });
+
+    res.json({ ok: true, needs_2fa: false, data: { ...acc.toJSON(), session_string: undefined } });
+  } catch (err) {
+    console.error('[wizard] confirm xato:', err);
+    res.status(500).json({ error: err.message || 'Server xatosi' });
+  }
+});
+
+// POST /api/outreach/accounts/create/2fa { session_id, password }
+router.post('/accounts/create/2fa', async (req, res) => {
+  try {
+    const { session_id, password } = req.body || {};
+    if (!session_id || !password?.trim()) return res.status(400).json({ error: 'session_id va password majburiy' });
+
+    const pending = pendingSessions.get(session_id);
+    if (!pending) return res.status(400).json({ error: 'Sessiya topilmadi yoki muddati o\'tgan' });
+
+    const { client, phone } = pending;
+
+    try {
+      await client.checkPassword(password.trim());
+    } catch (err) {
+      return res.status(400).json({ error: err.message?.includes('PASSWORD_HASH_INVALID') ? 'Parol noto\'g\'ri' : err.message });
+    }
+
+    const sessionString = client.session.save();
+    const me = await client.getMe();
+    await client.disconnect();
+    pendingSessions.delete(session_id);
+
+    const acc = await TelegramAccount.create({
+      phone: me.phone ? `+${me.phone}` : phone,
+      session_string: sessionString,
+      label: me.firstName || null,
+      daily_limit: 40,
+      status: 'active',
+    });
+
+    res.json({ ok: true, data: { ...acc.toJSON(), session_string: undefined } });
+  } catch (err) {
+    console.error('[wizard] 2fa xato:', err);
+    res.status(500).json({ error: err.message || 'Server xatosi' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // NOMER QIDIRISH
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -468,6 +604,64 @@ router.post('/lookup-phone', async (req, res) => {
     }
   } catch (err) {
     console.error('[outreach] lookup-phone xato:', err);
+    res.status(500).json({ error: err.message || 'Server xatosi' });
+  }
+});
+
+// POST /api/outreach/lookup-phone-bulk { usernames: string[] }
+// Ko'plab username'larni ketma-ket tekshiradi, CSV sifatida qaytaradi
+router.post('/lookup-phone-bulk', async (req, res) => {
+  try {
+    const { usernames } = req.body || {};
+    if (!Array.isArray(usernames) || usernames.length === 0) {
+      return res.status(400).json({ error: 'usernames array majburiy' });
+    }
+    if (usernames.length > 5000) {
+      return res.status(400).json({ error: 'Bir vaqtda maksimal 5000 ta username' });
+    }
+
+    const account = await TelegramAccount.findOne({ where: { status: 'active' } });
+    if (!account) {
+      return res.status(400).json({ error: "Aktiv Telegram akkount yo'q" });
+    }
+
+    const client = new TelegramClient(
+      new StringSession(account.session_string),
+      config.telegram.apiId,
+      config.telegram.apiHash,
+      { connectionRetries: 2 }
+    );
+    await client.connect();
+
+    const results = [];
+    try {
+      for (const raw of usernames) {
+        const query = (raw || '').trim().replace(/^@/, '');
+        if (!query) { results.push({ username: raw, error: 'bo\'sh' }); continue; }
+        try {
+          const entity = await client.getEntity(query);
+          const phone = entity.phone ? `+${entity.phone}` : null;
+          results.push({
+            username: entity.username || query,
+            user_id: entity.id?.toString() || '',
+            first_name: entity.firstName || '',
+            last_name: entity.lastName || '',
+            phone: phone || '',
+            is_bot: entity.bot ? 'ha' : 'yo\'q',
+          });
+          // Flood nazorat
+          await new Promise((r) => setTimeout(r, 400));
+        } catch (err) {
+          results.push({ username: query, error: err.message?.includes('No user') ? 'topilmadi' : err.message });
+        }
+      }
+    } finally {
+      await client.disconnect();
+    }
+
+    res.json({ ok: true, total: results.length, data: results });
+  } catch (err) {
+    console.error('[outreach] lookup-phone-bulk xato:', err);
     res.status(500).json({ error: err.message || 'Server xatosi' });
   }
 });

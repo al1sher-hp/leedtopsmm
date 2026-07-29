@@ -249,6 +249,24 @@ export function lookupPhone(username) {
   }, PIPELINE_API_URL);
 }
 
+export function lookupPhoneBulk(usernames) {
+  return request('/api/outreach/lookup-phone-bulk', {
+    method: 'POST',
+    body: JSON.stringify({ usernames }),
+  }, PIPELINE_API_URL);
+}
+
+// ─── Akkount yaratish wizard ───────────────────────────────────────────────────
+export function wizardStart(phone) {
+  return request('/api/outreach/accounts/create/start', { method: 'POST', body: JSON.stringify({ phone }) }, PIPELINE_API_URL);
+}
+export function wizardConfirm(session_id, code) {
+  return request('/api/outreach/accounts/create/confirm', { method: 'POST', body: JSON.stringify({ session_id, code }) }, PIPELINE_API_URL);
+}
+export function wizardTwoFA(session_id, password) {
+  return request('/api/outreach/accounts/create/2fa', { method: 'POST', body: JSON.stringify({ session_id, password }) }, PIPELINE_API_URL);
+}
+
 export default {
   fetchLeads,
   fetchStats,

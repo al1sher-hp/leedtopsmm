@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   fetchAccounts, addAccount, verifyAccount, updateAccount, deleteAccount,
+  wizardStart, wizardConfirm, wizardTwoFA,
 } from '../lib/api.js';
 
 const STATUS_COLORS = {
@@ -14,10 +15,134 @@ const STATUS_LABELS = {
   active: 'Aktiv', banned: 'Bloklangan', limited: 'Limit', unverified: 'Tekshirilmagan',
 };
 
+// ─── Akkount yaratish wizard ────────────────────────────────────────────────
+function AccountWizard({ onSuccess, onCancel }) {
+  const [step, setStep] = useState(1); // 1=phone, 2=code, 3=2fa, 4=done
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [sessionId, setSessionId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleStart(e) {
+    e.preventDefault();
+    if (!phone.trim()) return;
+    setLoading(true); setError('');
+    try {
+      const res = await wizardStart(phone.trim());
+      setSessionId(res.session_id);
+      setStep(2);
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function handleConfirm(e) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setLoading(true); setError('');
+    try {
+      const res = await wizardConfirm(sessionId, code.trim());
+      if (res.needs_2fa) { setStep(3); }
+      else { setStep(4); onSuccess(); }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function handle2FA(e) {
+    e.preventDefault();
+    if (!password.trim()) return;
+    setLoading(true); setError('');
+    try {
+      await wizardTwoFA(sessionId, password.trim());
+      setStep(4); onSuccess();
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  }
+
+  const stepLabel = ['', 'Telefon raqam', 'Tasdiqlash kodi', 'Ikki bosqichli himoya', 'Tayyor!'];
+
+  return (
+    <div className="bg-white border border-indigo-200 rounded-xl p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-gray-800">📱 Telegram orqali akkount qo'shish</h3>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+      </div>
+
+      {/* Progress */}
+      <div className="flex gap-1 mb-5">
+        {[1,2,3].map((s) => (
+          <div key={s} className={`flex-1 h-1 rounded-full transition-colors ${step > s ? 'bg-green-500' : step === s ? 'bg-indigo-500' : 'bg-gray-200'}`} />
+        ))}
+      </div>
+
+      <p className="text-xs text-gray-500 mb-3">Qadam {Math.min(step,3)}/3: {stepLabel[Math.min(step,3)]}</p>
+
+      {step === 1 && (
+        <form onSubmit={handleStart} className="flex gap-2">
+          <input
+            type="text"
+            placeholder="+998901234567"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            autoFocus
+          />
+          <button disabled={loading} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+            {loading ? '…' : 'Kod yuborish'}
+          </button>
+        </form>
+      )}
+
+      {step === 2 && (
+        <form onSubmit={handleConfirm} className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Telegramdan kelgan kod"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            autoFocus
+          />
+          <button disabled={loading} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+            {loading ? '…' : 'Tasdiqlash'}
+          </button>
+        </form>
+      )}
+
+      {step === 3 && (
+        <form onSubmit={handle2FA} className="flex gap-2">
+          <input
+            type="password"
+            placeholder="2FA paroli"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            autoFocus
+          />
+          <button disabled={loading} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+            {loading ? '…' : 'Kirish'}
+          </button>
+        </form>
+      )}
+
+      {step === 4 && (
+        <div className="text-center py-4">
+          <div className="text-4xl mb-2">✅</div>
+          <p className="text-green-700 font-medium">Akkount muvaffaqiyatli qo'shildi!</p>
+        </div>
+      )}
+
+      {error && <p className="text-red-600 text-sm mt-3">❌ {error}</p>}
+    </div>
+  );
+}
+
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [verifying, setVerifying] = useState(null);
   const [form, setForm] = useState({ phone: '', session_string: '', label: '', daily_limit: 40 });
   const [formError, setFormError] = useState('');
@@ -93,13 +218,28 @@ export default function AccountsPage() {
           <h2 className="text-xl font-semibold text-gray-800">Telegram Akkountlar</h2>
           <p className="text-sm text-gray-500">Outreach uchun ishlatiladigan userbot akkauntlari</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
-        >
-          + Akkount qo'shish
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowWizard(!showWizard); setShowForm(false); }}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
+          >
+            📱 Telefon orqali
+          </button>
+          <button
+            onClick={() => { setShowForm(!showForm); setShowWizard(false); }}
+            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200"
+          >
+            Session string
+          </button>
+        </div>
       </div>
+
+      {showWizard && (
+        <AccountWizard
+          onSuccess={() => { load(); setTimeout(() => setShowWizard(false), 2000); }}
+          onCancel={() => setShowWizard(false)}
+        />
+      )}
 
       {showForm && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
