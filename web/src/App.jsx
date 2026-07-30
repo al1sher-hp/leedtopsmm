@@ -6,6 +6,7 @@ import CampaignsPage from './components/CampaignsPage.jsx';
 import AccountsPage from './components/AccountsPage.jsx';
 import PhoneLookupPage from './components/PhoneLookupPage.jsx';
 import FoldersPage from './components/FoldersPage.jsx';
+import DialogsPage from './components/DialogsPage.jsx';
 
 const TABS = [
   { id: 'leads',     label: "Lead'lar" },
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'accounts',  label: '👤 Akkountlar' },
   { id: 'lookup',    label: '📞 Nomer topish' },
   { id: 'folders',   label: '📁 Jildlar' },
+  { id: 'dialogs',   label: '💬 Lichka' },
   { id: 'blacklist', label: "Qora ro'yxat" },
 ];
 
@@ -46,6 +48,7 @@ export default function App() {
          view === 'accounts'   ? <AccountsPage />    :
          view === 'lookup'     ? <PhoneLookupPage /> :
          view === 'folders'    ? <FoldersPage />     :
+         view === 'dialogs'    ? <DialogsPage />     :
          <LeadsPage />}
       </main>
     </div>

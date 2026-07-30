@@ -304,6 +304,36 @@ export function deleteFolderEntry(id) {
   return request(`/api/folders/${id}`, { method: 'DELETE' }, PIPELINE_API_URL);
 }
 
+// ─── Dialoglar (lichka kontaktlari) ───────────────────────────────────────────
+// Ro'yxat/eksport/opted_out DB'dan o'qiladi (tez API host'i), sinxronlash esa
+// jonli Telegram ulanishi (getPool()) talab qiladi — pipeline/scan bilan bir
+// xil sababga ko'ra doim-ishlaydigan hostga yuboriladi.
+export function fetchDialogs(params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return request(`/api/dialogs${q ? `?${q}` : ''}`);
+}
+
+export function updateDialogOptedOut(id, opted_out) {
+  return request(`/api/dialogs/${id}`, { method: 'PATCH', body: JSON.stringify({ opted_out }) });
+}
+
+export function exportDialogsXlsxUrl(params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return `${API_URL}/api/dialogs/export.xlsx${q ? `?${q}` : ''}`;
+}
+
+export function runDialogsSync(data = {}) {
+  return request('/api/dialogs/sync', { method: 'POST', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+
+export function cancelDialogsSync() {
+  return request('/api/dialogs/sync/cancel', { method: 'POST' }, PIPELINE_API_URL);
+}
+
+export function fetchDialogsSyncStatus() {
+  return request('/api/dialogs/sync/status', {}, PIPELINE_API_URL);
+}
+
 export default {
   fetchLeads,
   fetchStats,
@@ -339,4 +369,10 @@ export default {
   fetchFolderMembers,
   exportFolderXlsxUrl,
   deleteFolderEntry,
+  fetchDialogs,
+  updateDialogOptedOut,
+  exportDialogsXlsxUrl,
+  runDialogsSync,
+  cancelDialogsSync,
+  fetchDialogsSyncStatus,
 };
