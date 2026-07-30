@@ -12,9 +12,12 @@ Postgres'ga yozadigan to'liq tizim + mobile-first React dashboard.
   olinadi, lekin ularning telefoni odatda `null` (privacy sozlamasi).
 - Tizim hech qachon a'zolarning telefonini ommaviy sug'urmaydi — faqat ochiq e'lon
   qilingan kontakt va admin username'lari yig'iladi.
-- Hech bir lead o'chirilmaydi — **bittagina istisno bilan**: qora ro'yxat (blacklist)
-  yozuvi tasdiqlangach, o'sha kanal/guruhning avval yig'ilgan lead yozuvi ham o'chiriladi
-  (qarang: "Qora ro'yxat" bo'limi). Gemini scoring faqat tartiblash uchun, filtr emas.
+- Hech bir lead/dialog kontakti o'chirilmaydi — **ikkita istisno bilan**: (1) qora
+  ro'yxat (blacklist) yozuvi tasdiqlangach, o'sha kanal/guruhning avval yig'ilgan lead
+  yozuvi ham o'chiriladi (qarang: "Qora ro'yxat" bo'limi); (2) `PhoneLookup` keshi
+  (tashqi lookup natijalari) TTL bilan o'chadi — bu asosiy ma'lumot emas, faqat
+  vaqtinchalik snapshot kesh (qarang: "Nomer topish provayderlari" bo'limi,
+  `docs/DATA-RISK.md`). Gemini scoring faqat tartiblash uchun, filtr emas.
 
 ## Qora ro'yxat (Blacklist)
 
@@ -41,11 +44,17 @@ Har qanday kanal/guruh/bot egasi o'z obyektini `/api/blacklist` orqali (dashboar
   /discovery   -> discovery.js (search / similar / catalog)
   /enrich      -> enrich.js (description/pinned/admin -> kontakt)
   /extract     -> phone.js, username.js (regex + normalizatsiya)
-  /score       -> gemini.js (Gemini 3 Flash scoring)
+  /score       -> gemini.js (Gemini 3 Flash scoring + premium qiziqish tekshiruvi)
   /db          -> models.js, index.js, migrate.js
-  /api         -> server.js, routes.js
-  /jobs        -> runPipeline.js
+  /dialogs     -> sync.js (lichka dialoglarini o'qish), classify.js (premium qiziqish tahlili)
+  /folders     -> limits.js, client.js (GramJS Dialog Filter ko'prigi), sync.js, rules.js
+  /lookup      -> nomer topish provider zanjiri (qarang: "Nomer topish provayderlari")
+    /providers -> gramjs.js (haqiqiy Telegram), tgbot.js (tashqi bot)
+    /bridge    -> botBridge.js (tashqi botga xabar yuborish/javob kutish ko'prigi), parsers/
+  /api         -> server.js, routes.js, folderRoutes.js, dialogRoutes.js, lookupRoutes.js
+  /jobs        -> runPipeline.js, dialogsSyncCancellation.js, dialogsClassifyCancellation.js
 /web           -> React + Vite + Tailwind dashboard (mobile-first)
+/docs          -> DATA-RISK.md (tashqi lookup bot bilan bog'liq xavflar — MAJBURIY o'qish)
 ```
 
 ## O'rnatish
@@ -164,6 +173,110 @@ bitta manbani chuqur tekshiradi.
 Guruh yoki kanalning barcha a'zolarini GramJS `GetParticipants` orqali olib, Excel
 faylga chiqaradi (`group-<id>-users.xlsx`). Fayl quyidagi ustunlarni o'z ichiga oladi:
 ID, Ism, Username, Telefon (faqat ochiq bo'lsa), Bot, Premium, Deleted.
+
+## Jildlar va lichka CRM
+
+Abbosning talabi: *"Accountga chat bot qo'shib 500 taga yaqin odamni premium degan
+jildga o'tkazib userlarini olib yig'ib berishi kerak"* va *"Lichkadagi odamlarni
+nomerlarini aniqlab ularga reklama ko'rsatishimiz kerak"*. Uch bosqichda amalga
+oshirilgan:
+
+1. **Dialoglar sinxronizatsiyasi** (`src/dialogs/sync.js`) — userbot'ning barcha
+   shaxsiy (lichka) dialoglarini `messages.getDialogs` bilan sahifalab o'qiydi va
+   `DialogContact` jadvaliga yozadi (upsert, hech qachon o'chirmaydi). Faqat User
+   tipidagi dialoglar — kanal/guruh o'tkazib yuboriladi; botlar `is_bot` bilan
+   belgilanib baribir yoziladi. Telefon faqat Telegram o'zi ochiq bergan bo'lsa
+   saqlanadi (`phone_source: 'telegram'`).
+2. **Premium qiziqish klassifikatsiyasi** (`src/dialogs/classify.js`) — har bir
+   kontaktning so'nggi xabarlarini o'qib, FAQAT suhbatdoshning (bizning emas)
+   xabarlarida premium bilan bog'liq kalit so'zlar (`PREMIUM_KEYWORDS`,
+   `src/config/seeds.js`) necha marta uchraganini hisoblaydi — bitta xabarda
+   takrorlansa ham 1 deb sanaladi ("necha marta yozishma", so'z soni emas).
+   Threshold'dan o'tganlar (ixtiyoriy) Gemini orqali ikkinchi marta tekshiriladi
+   — xarajatni tejash uchun faqat nomzodlarga (`ai_rejected` bayrog'i qo'yiladi,
+   `premium_mentions` o'chirilmaydi).
+3. **Jildlar** (`src/folders/`) — qoidaga (masalan `premium_mentions_gte: 3`) mos
+   kelgan kontaktlarni Telegram jildiga (Dialog Filter) joylaydi. **Telegram jild
+   limiti bor** (oddiy akkaunt: 10 jild / 100 chat, Premium: 20 jild / 200 chat) —
+   500 kishi bitta jildga sig'MAYDI. Yechim: to'liq ro'yxat DB'da saqlanadi
+   (cheklovsiz), Telegram jildiga faqat limitgacha joylanadi, limitdan oshgan qism
+   **jimgina tashlanmaydi** — `overflow_count`/`truncated` orqali API va dashboard'da
+   ochiq ko'rsatiladi, to'liq ro'yxat har doim XLSX eksport orqali olinadi.
+
+`opted_out=true` belgilangan kontaktlar barcha uch bosqichda ham (sinxronizatsiya,
+klassifikatsiya, jildga qo'llash) butunlay chetlab o'tiladi.
+
+| Endpoint | Tavsif |
+|---|---|
+| `POST /api/dialogs/sync` | Dialoglarni sinxronlashni background'da boshlash. Body: `{ limit?, since? }` -> `{ job_id }` |
+| `GET /api/dialogs/sync/status` | Oxirgi sinxronizatsiya JobRun holati |
+| `POST /api/dialogs/sync/cancel` | Sinxronizatsiyani to'xtatish |
+| `POST /api/dialogs/classify` | Premium qiziqish tahlilini boshlash. Body: `{ keywords?, threshold?, ai_verify?, message_limit?, dialog_limit? }` -> `{ job_id }` |
+| `GET /api/dialogs/classify/status` | Progress + ETA (`params_json.eta_seconds`) |
+| `POST /api/dialogs/classify/cancel` | Tahlilni to'xtatish |
+| `GET /api/dialogs` | Filtr: `has_phone`, `is_premium`, `is_bot`, `folder`, `premium_mentions_gte`, `opted_out`, `q` + `sort`, `page`, `limit` |
+| `PATCH /api/dialogs/:id` | FAQAT `{ "opted_out": true/false }` |
+| `GET /api/dialogs/export.xlsx` | Joriy filtr bo'yicha XLSX eksport |
+| `POST /api/dialogs/enrich-phones` | Raqami yo'q kontaktlarni lookup zanjiriga yuboradi (background, `job_id`) |
+| `GET /api/folders` | DB + Telegram holati — har birida `peer_count`, `limit`, `overflow_count`, `truncated` |
+| `POST /api/folders` | Yangi jild yaratish. Body: `{ title, emoticon?, rule? }` |
+| `POST /api/folders/:id/apply` | Qoidani qo'llash (background). Response: `{ job_id }` |
+| `GET /api/folders/jobs/:jobId` | Qo'llash holati |
+| `POST /api/folders/:id/sync` | Jildni Telegram'dan qayta o'qish |
+| `GET /api/folders/:id/members` | Sahifalangan a'zolar ro'yxati |
+| `GET /api/folders/:id/export.xlsx` | Jild a'zolarini XLSX ga eksport |
+| `DELETE /api/folders/:id` | FAQAT `managed_by_us=true` bo'lgan jildlar uchun (aks holda 403) |
+
+## Nomer topish provayderlari
+
+> ⚠️ **Ishlatishdan oldin [`docs/DATA-RISK.md`](docs/DATA-RISK.md)ni albatta o'qing.**
+> Tashqi bot (`@Telefon_raqam_topishbot`) real vaqtdagi Telegram ma'lumotiga emas,
+> eski snapshot bazaga murojaat qiladi va sinovda noto'g'ri natija qaytargan.
+
+`src/lookup/index.js`dagi `resolve()` funksiyasi provayderlar zanjiri bo'ylab
+ishlaydi: **cache -> guard -> gramjs -> tgbot -> audit**.
+
+1. **cache** — `PhoneLookup` jadvalidan muddati o'tmagan (`expires_at > now`)
+   natija bo'lsa, hech qanday provider chaqirilmasdan shu qaytariladi.
+2. **guard** (`src/lookup/guard.js`) — provider chaqirilishidan OLDIN: qora
+   ro'yxat, `opted_out`, kunlik cap (`LOOKUP_DAILY_CAP`) tekshiriladi. Ruxsat
+   bo'lmasa tipli xato (`LOOKUP_BLACKLISTED`/`LOOKUP_OPTED_OUT`/`LOOKUP_DAILY_CAP`)
+   tashlanadi.
+3. **gramjs** (`src/lookup/providers/gramjs.js`) — GramJS `getEntity` orqali
+   to'g'ridan-to'g'ri Telegram'dan. `confidence: 'verified'` — real vaqt.
+4. **tgbot** (`src/lookup/providers/tgbot.js` + `src/lookup/bridge/botBridge.js`)
+   — gramjs topmasa (masalan raqam yashirilgan), tashqi botga xabar yuborib javob
+   kutiladi. `confidence: 'unverified'` — **hech qachon** `verified` deb
+   belgilanmaydi. Barcha so'rovlar bitta navbatda ketma-ket (parallel emas),
+   `LOOKUP_MIN_INTERVAL_MS` + jitter, daqiqada 15 tadan ko'p emas.
+5. **audit** (`src/lookup/audit.js`) — har bir haqiqatan chaqirilgan provider
+   urinishi (topilgan yoki yo'q) qayd etiladi; telefon FAQAT niqoblangan holda
+   (`+9989****4567`) — to'liq raqam audit jadvaliga hech qachon yozilmaydi.
+
+Birinchi `found:true` qaytargan provider g'olib — qolganlari chaqirilmaydi.
+`provider` parametri bilan zanjir bitta provayderga cheklanishi mumkin (dashboard'dagi
+"Auto / Faqat Telegram / Faqat bot" tanlovi).
+
+`confidence` maydoni UI'da MAJBURIY ko'rsatiladi (ikki manba bir xil taqdim
+etilmaydi):
+
+- `verified` -> ✅ Telegram (tasdiqlangan)
+- `unverified` -> ⚠️ Tashqi baza (tasdiqlanmagan)
+
+| Endpoint | Tavsif |
+|---|---|
+| `POST /api/lookup/resolve` | Bitta so'rov. Body: `{ query, purpose?, provider? }` |
+| `POST /api/lookup/bulk` | Ko'plab so'rov (background). Body: `{ queries[], purpose?, provider? }` -> `{ job_id }` |
+| `GET /api/lookup/jobs/:id` | Progress + provider taqsimoti |
+| `GET /api/lookup/jobs/:id/export.xlsx` | Natijalarni XLSX ga eksport |
+| `GET /api/lookup/providers` | Bot holati (obuna/limit), kunlik qoldiq, oxirgi xato |
+| `GET /api/lookup/audit` | Filtr: `provider`, `actor`, `date_from`, `date_to` |
+
+Mavjud `POST /api/outreach/lookup-phone` va `lookup-phone-bulk` javob shakli
+o'zgarishsiz qoldi — ular ichkarida shu zanjirga proxy qiladi.
+
+`LOOKUP_PROVIDER_CHAIN` orqali zanjirni sozlash mumkin (masalan faqat haqiqiy
+Telegram uchun `LOOKUP_PROVIDER_CHAIN=gramjs`) — qarang: `.env.example`.
 
 ## Skriptlar
 
