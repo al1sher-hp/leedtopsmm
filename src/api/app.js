@@ -8,7 +8,9 @@ import scanRoutes from './scanRoutes.js';
 import outreachRoutes from './outreachRoutes.js';
 import folderRoutes from './folderRoutes.js';
 import dialogRoutes from './dialogRoutes.js';
+import lookupRoutes from './lookupRoutes.js';
 import { startMonitor } from '../outreach/inboxMonitor.js';
+import { purgeExpired } from '../lookup/cache.js';
 
 const app = express();
 
@@ -33,6 +35,7 @@ app.use('/api/scan', scanRoutes);
 app.use('/api/outreach', outreachRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/dialogs', dialogRoutes);
+app.use('/api/lookup', lookupRoutes);
 app.use('/api', routes);
 
 // Inbox monitorini server.js (doim ishlaydigan) ichida ishga tushirish —
@@ -41,6 +44,24 @@ app.use('/api', routes);
 // Persistent server uchun: server.js'dan setDbStatus(true) chaqirilgach monitor ham boshlanadi.
 export function startInboxMonitor() {
   startMonitor(5 * 60_000); // har 5 daqiqa
+}
+
+// HIMOYA #5 (raqamlar TTL bilan o'chadi) shu interval orqali amalga oshadi —
+// muddati o'tgan PhoneLookup qatorlari va eskirgan raw_response'lar kunda
+// bir marta tozalanadi. Xuddi inbox monitor kabi faqat doim ishlaydigan
+// (server.js) entrypoint'da ishga tushiriladi.
+const DAY_MS = 24 * 60 * 60 * 1000;
+export function startLookupPurge() {
+  purgeExpired()
+    .then(({ expiredCount, rawCleared }) => {
+      if (expiredCount > 0 || rawCleared > 0) {
+        console.log(`[lookup] tozalash: ${expiredCount} ta muddati o'tgan yozuv, ${rawCleared} ta raw_response tozalandi`);
+      }
+    })
+    .catch((err) => console.error('[lookup] tozalash xatosi:', err.message));
+  setInterval(() => {
+    purgeExpired().catch((err) => console.error('[lookup] tozalash xatosi:', err.message));
+  }, DAY_MS);
 }
 app.get('/health', (req, res) => res.json({ ok: dbOk, db: dbOk }));
 

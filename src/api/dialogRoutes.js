@@ -278,4 +278,86 @@ router.get('/classify/status', async (req, res) => {
   }
 });
 
+// ─── Telefon boyitish (lookup) ───────────────────────────────────────────────
+let dialogsEnrichRunning = false;
+
+async function runEnrichPhones(contacts, job) {
+  const { resolve } = await import('../lookup/index.js');
+  let done = 0;
+  let ok = 0;
+  let failed = 0;
+
+  try {
+    for (const contact of contacts) {
+      // Username bo'lsa shu ishlatiladi (GramJS/tgbot uchun ishonchliroq) —
+      // bo'lmasa tg_user_id bilan urinib ko'riladi.
+      const query = contact.username || contact.tg_user_id;
+      try {
+        const result = await resolve(query, { purpose: 'dialogs-enrich', actor: 'job:dialogs' });
+        if (result.found && result.phone) {
+          await contact.update({ phone: result.phone, phone_source: 'lookup' });
+          ok += 1;
+        }
+      } catch (err) {
+        failed += 1;
+        console.error(`[dialogs] enrich-phones ${contact.tg_user_id} uchun xato:`, err.message);
+        // Kunlik cap/obuna/limit — qolganlarni ham urinishning ma'nosi yo'q,
+        // butun ishni to'xtatamiz.
+        if (['LOOKUP_DAILY_CAP', 'LOOKUP_SUBSCRIPTION_REQUIRED', 'LOOKUP_QUOTA_EXHAUSTED'].includes(err.code)) {
+          done += 1;
+          await job.update({ done, ok_count: ok, failed_count: failed });
+          break;
+        }
+      }
+      done += 1;
+      await job.update({ done, ok_count: ok, failed_count: failed });
+    }
+    await job.update({ status: 'completed' });
+  } catch (err) {
+    await job.update({ status: 'failed', error_message: err.message });
+  }
+}
+
+// POST /api/dialogs/enrich-phones  { limit? } -> background, job_id
+// Telefon raqami yo'q, opted_out=false kontaktlarni lookup zanjiriga
+// yuboradi (actor='job:dialogs') — opted_out va qora ro'yxat guard.js
+// orqali AVTOMATIK chetlab o'tiladi (har bir resolve() chaqiruvi ichida).
+router.post('/enrich-phones', async (req, res) => {
+  if (process.env.VERCEL) {
+    return res.status(501).json({
+      error: 'Telefon boyitish Vercel serverless funksiyasida ishlamaydi (doimiy Telegram ulanishi kerak).',
+    });
+  }
+  if (dialogsEnrichRunning) {
+    return res.status(409).json({ error: 'Boyitish allaqachon ishlamoqda' });
+  }
+
+  try {
+    const limit = Math.min(Math.max(parseInt(req.body?.limit, 10) || 100, 1), 500);
+    const contacts = await DialogContact.findAll({
+      where: { phone: null, opted_out: false },
+      limit,
+    });
+
+    const job = await JobRun.create({
+      kind: 'lookup_bulk',
+      status: 'running',
+      total: contacts.length,
+      params_json: { source: 'dialogs-enrich' },
+    });
+
+    dialogsEnrichRunning = true;
+    const donePromise = runEnrichPhones(contacts, job);
+    donePromise.catch((err) => console.error('[dialogs] enrich-phones xatosi:', err)).finally(() => {
+      dialogsEnrichRunning = false;
+    });
+
+    res.status(202).json({ message: 'Telefon boyitish boshlandi', job_id: job.id, total: contacts.length });
+  } catch (err) {
+    dialogsEnrichRunning = false;
+    console.error('[dialogs] POST /enrich-phones xato:', err);
+    res.status(500).json({ error: err.message || 'Server xatosi' });
+  }
+});
+
 export default router;

@@ -7,7 +7,7 @@ import { TelegramClient, Api } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import config from '../config/index.js';
 import {
-  TelegramAccount, Campaign, CampaignTarget, CampaignReply, ScanResult, PhoneLookup,
+  TelegramAccount, Campaign, CampaignTarget, CampaignReply, ScanResult,
 } from '../db/models.js';
 import { startCampaign, pauseCampaign, getWorkerStatus } from '../outreach/messagingWorker.js';
 import { checkAllReplies } from '../outreach/inboxMonitor.js';
@@ -550,8 +550,9 @@ router.post('/accounts/create/2fa', async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 
 // POST /api/outreach/lookup-phone  { username: "@someuser" | "someuser" }
-// GramJS getEntity orqali user'ni topadi; `phone` maxfiylik sozlamalariga
-// qarab ko'p hollarda bo'sh (null) qaytadi — bu xato emas, kutilgan holat.
+// ICHKARIDA src/lookup/index.js (provider zanjiri: gramjs -> tgbot) ga
+// proxy qiladi — javob shakli o'zgarishsiz qoladi, lekin endi cache/guard/
+// audit va (sozlansa) tashqi bot fallback'i bilan ishlaydi.
 router.post('/lookup-phone', async (req, res) => {
   try {
     const { username } = req.body || {};
@@ -560,59 +561,33 @@ router.post('/lookup-phone', async (req, res) => {
     }
     const query = username.trim().replace(/^@/, '');
 
-    const account = await TelegramAccount.findOne({ where: { status: 'active' } });
-    if (!account) {
-      return res.status(400).json({ error: "Aktiv Telegram akkount yo'q. Avval akkount qo'shing va verify qiling." });
-    }
+    const { resolve } = await import('../lookup/index.js');
+    const lookupResult = await resolve(query, { purpose: 'outreach', actor: 'api' });
 
-    const client = new TelegramClient(
-      new StringSession(account.session_string),
-      config.telegram.apiId,
-      config.telegram.apiHash,
-      { connectionRetries: 2 }
-    );
-    await client.connect();
-    try {
-      let entity;
-      try {
-        entity = await client.getEntity(query);
-      } catch (err) {
-        return res.status(404).json({ error: 'Foydalanuvchi topilmadi', detail: err.message });
-      }
+    const result = {
+      username: lookupResult.username || query,
+      user_id: lookupResult.user_id,
+      first_name: lookupResult.first_name,
+      last_name: lookupResult.last_name,
+      phone: lookupResult.phone,
+      is_bot: lookupResult.is_bot,
+      provider: lookupResult.provider,
+      confidence: lookupResult.confidence,
+      source_note: lookupResult.source_note,
+      ...(lookupResult.phone ? {} : { message: 'Raqam yashirilgan' }),
+    };
 
-      const phone = entity.phone ? `+${entity.phone}` : null;
-      const result = {
-        username: entity.username || query,
-        user_id: entity.id?.toString() || null,
-        first_name: entity.firstName || null,
-        last_name: entity.lastName || null,
-        phone,
-        is_bot: entity.bot || false,
-        ...(phone ? {} : { message: 'Raqam yashirilgan' }),
-      };
-
-      await PhoneLookup.create({
-        contact_type: 'username',
-        contact_value: query.toLowerCase(),
-        phone,
-        tg_user_id: result.user_id,
-        first_name: result.first_name,
-        last_name: result.last_name,
-        is_bot: result.is_bot,
-      });
-
-      res.json({ data: result });
-    } finally {
-      await client.disconnect();
-    }
+    res.json({ data: result });
   } catch (err) {
     console.error('[outreach] lookup-phone xato:', err);
-    res.status(500).json({ error: err.message || 'Server xatosi' });
+    const status = err.code?.startsWith('LOOKUP_') || err.code === 'GRAMJS_NO_ACCOUNT' ? 400 : 500;
+    res.status(status).json({ error: err.message || 'Server xatosi', code: err.code });
   }
 });
 
 // POST /api/outreach/lookup-phone-bulk { usernames: string[] }
-// Ko'plab username'larni ketma-ket tekshiradi, CSV sifatida qaytaradi
+// Ko'plab username'larni ketma-ket tekshiradi — har biri src/lookup/index.js
+// ga proxy qilinadi, javob shakli o'zgarishsiz.
 router.post('/lookup-phone-bulk', async (req, res) => {
   try {
     const { usernames } = req.body || {};
@@ -623,43 +598,33 @@ router.post('/lookup-phone-bulk', async (req, res) => {
       return res.status(400).json({ error: 'Bir vaqtda maksimal 5000 ta username' });
     }
 
-    const account = await TelegramAccount.findOne({ where: { status: 'active' } });
-    if (!account) {
-      return res.status(400).json({ error: "Aktiv Telegram akkount yo'q" });
-    }
-
-    const client = new TelegramClient(
-      new StringSession(account.session_string),
-      config.telegram.apiId,
-      config.telegram.apiHash,
-      { connectionRetries: 2 }
-    );
-    await client.connect();
-
+    const { resolve } = await import('../lookup/index.js');
     const results = [];
-    try {
-      for (const raw of usernames) {
-        const query = (raw || '').trim().replace(/^@/, '');
-        if (!query) { results.push({ username: raw, error: 'bo\'sh' }); continue; }
-        try {
-          const entity = await client.getEntity(query);
-          const phone = entity.phone ? `+${entity.phone}` : null;
-          results.push({
-            username: entity.username || query,
-            user_id: entity.id?.toString() || '',
-            first_name: entity.firstName || '',
-            last_name: entity.lastName || '',
-            phone: phone || '',
-            is_bot: entity.bot ? 'ha' : 'yo\'q',
-          });
-          // Flood nazorat
-          await new Promise((r) => setTimeout(r, 400));
-        } catch (err) {
-          results.push({ username: query, error: err.message?.includes('No user') ? 'topilmadi' : err.message });
-        }
+    for (const raw of usernames) {
+      const query = (raw || '').trim().replace(/^@/, '');
+      if (!query) {
+        results.push({ username: raw, error: "bo'sh" });
+        continue;
       }
-    } finally {
-      await client.disconnect();
+      try {
+        const lookupResult = await resolve(query, { purpose: 'outreach-bulk', actor: 'api' });
+        results.push({
+          username: lookupResult.username || query,
+          user_id: lookupResult.user_id || '',
+          first_name: lookupResult.first_name || '',
+          last_name: lookupResult.last_name || '',
+          phone: lookupResult.phone || '',
+          is_bot: lookupResult.is_bot ? 'ha' : "yo'q",
+        });
+        // Flood nazorat — provider zanjiridagi gramjs har chaqiruvda yangi
+        // ulanish ochadi/yopadi, bu ular orasida qo'shimcha bo'shliq beradi.
+        await new Promise((r) => setTimeout(r, 400));
+      } catch (err) {
+        results.push({ username: query, error: err.message });
+        // Kunlik cap/obuna/limit — qolganlarni ham urinib, hammasini
+        // "xato" bilan to'ldirishning ma'nosi yo'q.
+        if (['LOOKUP_DAILY_CAP', 'LOOKUP_SUBSCRIPTION_REQUIRED', 'LOOKUP_QUOTA_EXHAUSTED'].includes(err.code)) break;
+      }
     }
 
     res.json({ ok: true, total: results.length, data: results });

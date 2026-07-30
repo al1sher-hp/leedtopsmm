@@ -256,6 +256,41 @@ export function lookupPhoneBulk(usernames) {
   }, PIPELINE_API_URL);
 }
 
+// ─── Nomer topish — provider zanjiri (T1 oxirgi bosqich) ──────────────────────
+// DIQQAT: docs/DATA-RISK.md. `provider`: 'auto' | 'gramjs' | 'tgbot'.
+export function lookupResolve(query, { purpose, provider } = {}) {
+  return request(
+    '/api/lookup/resolve',
+    { method: 'POST', body: JSON.stringify({ query, purpose, provider }) },
+    PIPELINE_API_URL
+  );
+}
+
+export function lookupBulkStart(queries, { purpose, provider } = {}) {
+  return request(
+    '/api/lookup/bulk',
+    { method: 'POST', body: JSON.stringify({ queries, purpose, provider }) },
+    PIPELINE_API_URL
+  );
+}
+
+export function fetchLookupJob(id) {
+  return request(`/api/lookup/jobs/${id}`);
+}
+
+export function exportLookupJobXlsxUrl(id) {
+  return `${API_URL}/api/lookup/jobs/${id}/export.xlsx`;
+}
+
+export function fetchLookupProviders() {
+  return request('/api/lookup/providers', {}, PIPELINE_API_URL);
+}
+
+export function fetchLookupAudit(params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return request(`/api/lookup/audit${q ? `?${q}` : ''}`);
+}
+
 // ─── Akkount yaratish wizard ───────────────────────────────────────────────────
 export function wizardStart(phone) {
   return request('/api/outreach/accounts/create/start', { method: 'POST', body: JSON.stringify({ phone }) }, PIPELINE_API_URL);
@@ -393,4 +428,10 @@ export default {
   runDialogsClassify,
   cancelDialogsClassify,
   fetchDialogsClassifyStatus,
+  lookupResolve,
+  lookupBulkStart,
+  fetchLookupJob,
+  exportLookupJobXlsxUrl,
+  fetchLookupProviders,
+  fetchLookupAudit,
 };
