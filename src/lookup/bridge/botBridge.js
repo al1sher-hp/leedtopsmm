@@ -126,7 +126,14 @@ function classifyMessage(message) {
 // tinglanadi (ba'zi botlar "⏳ Qidirilmoqda..." yuborib, keyin O'SHA
 // xabarni tahrirlaydi). Parser "yakuniy emas" desa (masalan oraliq holat
 // xabari), keyingi xabar kutiladi — ko'pi bilan `maxIntermediates` ta.
-function waitForBotReply(client, user, { timeoutMs, isFinal, maxIntermediates }) {
+//
+// DIQQAT (race condition): bu funksiya CHAQIRILGANDA handler'lar SINXRON
+// ro'yxatdan o'tkaziladi (Promise executor darhol ishlaydi) — shuning uchun
+// chaqiruvchi buni SendMessage yuborishdan OLDIN chaqirishi SHART. Aks
+// holda bot juda tez javob bersa (sendText() qaytishi bilan bir vaqtda),
+// hali ro'yxatdan o'tmagan handler javobni o'tkazib yuboradi va bekorga
+// timeout bo'ladi.
+function listenForBotReply(client, user, { timeoutMs, isFinal, maxIntermediates }) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let intermediateCount = 0;
@@ -194,25 +201,31 @@ async function performAsk(client, botUsername, query, opts) {
 
   const last = await fetchLastMessage(client, inputPeer);
   if (!last) {
-    // Dialog yo'q — avval /start yuboriladi, uning javobidan menyu
-    // tugmasini qidiramiz.
-    await sendText(client, inputPeer, '/start');
-    const startReply = await waitForBotReply(client, user, {
+    // Dialog yo'q — avval /start yuboriladi. Tinglovchi SendMessage'dan
+    // OLDIN ulanadi (race condition oldini olish uchun), keyin FAQAT shu
+    // /start javobidan menyu tugmasini qidiramiz.
+    const startWaiter = listenForBotReply(client, user, {
       timeoutMs: opts.timeoutMs,
       isFinal: () => true,
       maxIntermediates: 1,
-    }).catch(() => null);
+    });
+    await sendText(client, inputPeer, '/start');
+    const startReply = await startWaiter.catch(() => null);
     if (startReply) await pressMenuButtonIfPresent(client, inputPeer, startReply.raw);
-  } else {
-    await pressMenuButtonIfPresent(client, inputPeer, last);
   }
+  // DIQQAT: dialog ALLAQACHON mavjud bo'lsa (yuqoridagi shart yolg'on),
+  // oxirgi xabardagi tugma ATAYLAB bosilmaydi — u OLDINGI so'rovning
+  // natijasi bo'lishi mumkin, uni qayta bosish eskirgan/aloqasiz amalni
+  // qayta ishga tushirib yuborishi mumkin. Menyu tugmasi FAQAT yangi
+  // dialog ochilib, /start'ning O'ZIGA javob kelganda bosiladi.
 
-  await sendText(client, inputPeer, query);
-  return waitForBotReply(client, user, {
+  const waiter = listenForBotReply(client, user, {
     timeoutMs: opts.timeoutMs,
     isFinal: opts.isFinal,
     maxIntermediates: opts.maxIntermediates,
   });
+  await sendText(client, inputPeer, query);
+  return waiter;
 }
 
 // LOOKUP_TIMEOUT bo'lsa (va faqat shu holatda) eksponensial backoff bilan

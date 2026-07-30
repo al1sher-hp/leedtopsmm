@@ -50,6 +50,13 @@ describe('assertAllowed', () => {
     await expect(assertAllowed('someuser')).resolves.toBeUndefined();
   });
 
+  it("kunlik cap FAQAT provider:'tgbot' urinishlarini sanaydi — 'cache'/'gramjs' xavfsiz so'rovlar cap'ni to'ldirmaydi", async () => {
+    await assertAllowed('someuser');
+    expect(LookupAudit.count).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ provider: 'tgbot' }) })
+    );
+  });
+
   it("blacklist tekshiruvi BOSHQA tekshiruvlardan OLDIN ishlaydi (qisqa tutashuv)", async () => {
     isBlacklisted.mockResolvedValue(true);
     DialogContact.findOne.mockResolvedValue({ opted_out: true });

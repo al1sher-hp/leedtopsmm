@@ -11,10 +11,13 @@ export class LookupNotAllowedError extends Error {
   }
 }
 
+// Cap FAQAT haqiqiy tashqi so'rovlarni (tgbot) sanaydi — 'cache' (real
+// so'rov emas) va 'gramjs' (haqiqiy Telegram, xavfsiz) urinishlari xavfsiz
+// bo'lgani uchun kunlik limitni bekorga to'ldirmasligi kerak.
 async function countToday() {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-  return LookupAudit.count({ where: { createdAt: { [Op.gte]: startOfDay } } });
+  return LookupAudit.count({ where: { createdAt: { [Op.gte]: startOfDay }, provider: 'tgbot' } });
 }
 
 // HIMOYA #1/#2/#4: lookup ISHGA TUSHISHDAN OLDIN tekshiriladi (provider

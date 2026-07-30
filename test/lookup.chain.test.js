@@ -32,6 +32,9 @@ vi.mock('../src/db/models.js', () => ({
       return job;
     }),
   },
+  LookupJobResult: {
+    create: vi.fn(async (fields) => ({ id: 1, ...fields })),
+  },
 }));
 
 const { assertAllowed } = await import('../src/lookup/guard.js');
@@ -39,6 +42,7 @@ const cache = await import('../src/lookup/cache.js');
 const { record } = await import('../src/lookup/audit.js');
 const { lookupViaGramjs } = await import('../src/lookup/providers/gramjs.js');
 const { lookupViaTgBot } = await import('../src/lookup/providers/tgbot.js');
+const { JobRun, LookupJobResult } = await import('../src/db/models.js');
 const { resolve, resolveBulk } = await import('../src/lookup/index.js');
 
 beforeEach(() => {
@@ -88,6 +92,18 @@ describe('resolve — provider zanjiri tartibi', () => {
     expect(lookupViaTgBot).not.toHaveBeenCalled();
     expect(result.fromCache).toBe(true);
     expect(result.found).toBe(true);
+  });
+
+  it("cache hit ham audit qilinadi (provider:'cache'), lekin kunlik cap'ni to'ldirmaydi", async () => {
+    cache.get.mockResolvedValue({
+      found: true, phone: '+998900000000', provider: 'gramjs', confidence: 'verified',
+      tg_user_id: '1', first_name: 'X', last_name: null, is_bot: false, source_note: null,
+    });
+
+    await resolve('someuser');
+
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record.mock.calls[0][0]).toMatchObject({ provider: 'cache', found: true, phone: '+998900000000' });
   });
 
   it('guard bloklasa hech qaysi provider chaqirilmaydi', async () => {
@@ -154,5 +170,39 @@ describe('resolveBulk', () => {
     const { jobId, donePromise } = await resolveBulk(['user1', 'user2']);
     expect(jobId).toBe(1);
     await donePromise;
+  });
+
+  it("har natija LookupJobResult'ga bitta INSERT bilan (append) qo'shiladi", async () => {
+    lookupViaGramjs.mockResolvedValue({ found: true, phone: '+998901234567', provider: 'gramjs' });
+    const queries = ['user1', 'user2', 'user3'];
+    const { donePromise } = await resolveBulk(queries);
+    await donePromise;
+
+    expect(LookupJobResult.create).toHaveBeenCalledTimes(queries.length);
+    expect(LookupJobResult.create.mock.calls[0][0]).toMatchObject({ job_id: 1, query: 'user1', found: true });
+  });
+
+  it("job.update() chaqiruvlari soni SO'ROVLAR soniga chiziqli (O(n)) — har birida params_json'ga to'liq " +
+    "'results' massivi qayta yozilmaydi", async () => {
+    lookupViaGramjs.mockResolvedValue({ found: true, phone: '+998901234567', provider: 'gramjs' });
+    const queries = Array.from({ length: 100 }, (_, i) => `user${i}`);
+    const { donePromise } = await resolveBulk(queries);
+    await donePromise;
+
+    const job = await JobRun.create.mock.results[0].value;
+    // 100 ta so'rov uchun 100 ta progress-yangilash + 1 ta "completed" = 101
+    expect(job.update).toHaveBeenCalledTimes(queries.length + 1);
+
+    // Progress yangilashlarning HECH BIRIDA katta (o'sib boruvchi) 'results'
+    // massivi yo'q — faqat oxirgi (yakuniy) chaqiruvda kichik provider_counts bor.
+    const progressCalls = job.update.mock.calls.slice(0, -1);
+    for (const [payload] of progressCalls) {
+      expect(payload.params_json).toBeUndefined();
+      expect(Object.keys(payload).sort()).toEqual(['done', 'failed_count', 'ok_count'].sort());
+    }
+
+    const finalCall = job.update.mock.calls[job.update.mock.calls.length - 1][0];
+    expect(finalCall.status).toBe('completed');
+    expect(finalCall.params_json.provider_counts).toEqual({ gramjs: queries.length });
   });
 });

@@ -3,8 +3,12 @@ import { assertAllowed } from './guard.js';
 import { lookupViaGramjs } from './providers/gramjs.js';
 import { lookupViaTgBot } from './providers/tgbot.js';
 import { record } from './audit.js';
-import { JobRun } from '../db/models.js';
+import { JobRun, LookupJobResult } from '../db/models.js';
 import config from '../config/index.js';
+
+// Kunlik cap'ga TA'SIR QILMAYDI (guard.js faqat provider:'tgbot' sanaydi) —
+// kesh natijasi audit uchun qayd etiladi, lekin bu real tashqi so'rov emas.
+const CACHE_PROVIDER = 'cache';
 
 const PROVIDERS = {
   gramjs: lookupViaGramjs,
@@ -56,7 +60,21 @@ export async function resolve(query, { purpose, actor = 'api', provider } = {}) 
   await assertAllowed(cleanQuery);
 
   const cached = await cache.get(cleanQuery);
-  if (cached) return fromCacheRow(cleanQuery, cached);
+  if (cached) {
+    // HIMOYA #3: kesh hit ham audit qilinadi — "hech qanday lookup
+    // yozilmasdan qolib ketmaydi" kafolati kesh yo'lida ham amal qiladi.
+    // provider:'cache' — bu HAQIQIY tashqi so'rov emas, shuning uchun
+    // kunlik cap'ga ta'sir qilmaydi (guard.js faqat provider:'tgbot' sanaydi).
+    await record({
+      query: cleanQuery,
+      provider: CACHE_PROVIDER,
+      found: cached.found,
+      actor,
+      purpose,
+      phone: cached.phone,
+    }).catch((auditErr) => console.error('[lookup] audit yozib bo\'lmadi:', auditErr.message));
+    return fromCacheRow(cleanQuery, cached);
+  }
 
   // `provider` berilsa (dashboard'dagi "Faqat Telegram"/"Faqat bot" tanlovi)
   // zanjir shu bittasiga cheklanadi; berilmasa yoki 'auto' bo'lsa standart
@@ -101,8 +119,16 @@ export async function resolve(query, { purpose, actor = 'api', provider } = {}) 
   return { ...EMPTY_RESULT, ...finalResult, fromCache: false };
 }
 
+const STOP_CODES = ['LOOKUP_DAILY_CAP', 'LOOKUP_SUBSCRIPTION_REQUIRED', 'LOOKUP_QUOTA_EXHAUSTED'];
+
+// Avval har iteratsiyada butun `results` massivi JobRun.params_json'ga QAYTA
+// YOZILARDI — 5000 tagacha so'rov ruxsat etilgani uchun bu O(n^2) DB yozuv
+// hajmiga olib kelardi (n-chi qadamda n ta elementli JSON qayta yoziladi).
+// Endi har natija LookupJobResult'ga bitta INSERT bilan (append, hech qachon
+// qayta yozilmaydi) qo'shiladi, JobRun esa faqat kichik, DOIMIY hajmdagi
+// sanoq maydonlarini (done/ok_count/failed_count) yangilaydi — har
+// iteratsiya O(1), jami ish O(n).
 async function runBulk(queries, { purpose, actor, provider }, job) {
-  const results = [];
   const providerCounts = {};
   let done = 0;
   let ok = 0;
@@ -112,31 +138,44 @@ async function runBulk(queries, { purpose, actor, provider }, job) {
     for (const query of queries) {
       try {
         const result = await resolve(query, { purpose, actor, provider });
-        results.push({ query, ...result });
+        await LookupJobResult.create({
+          job_id: job.id,
+          query,
+          found: result.found,
+          phone: result.phone,
+          provider: result.provider,
+          confidence: result.confidence,
+          first_name: result.first_name,
+          last_name: result.last_name,
+        });
         const key = result.provider || 'none';
         providerCounts[key] = (providerCounts[key] || 0) + 1;
         if (result.found) ok += 1;
       } catch (err) {
-        results.push({ query, found: false, error: err.message, code: err.code });
+        await LookupJobResult.create({
+          job_id: job.id,
+          query,
+          found: false,
+          error_message: err.message,
+          error_code: err.code || null,
+        });
         failed += 1;
         // Kunlik cap/obuna/limit kabi "butun ishni to'xtatish" xatolari —
         // qolgan so'rovlarni ham urinib, hammasini "xato" bilan
         // to'ldirishning ma'nosi yo'q.
-        if (['LOOKUP_DAILY_CAP', 'LOOKUP_SUBSCRIPTION_REQUIRED', 'LOOKUP_QUOTA_EXHAUSTED'].includes(err.code)) {
+        if (STOP_CODES.includes(err.code)) {
           done += 1;
-          await job.update({ done, ok_count: ok, failed_count: failed, params_json: { purpose, results, provider_counts: providerCounts } });
+          await job.update({ done, ok_count: ok, failed_count: failed });
           break;
         }
       }
       done += 1;
-      await job.update({
-        done,
-        ok_count: ok,
-        failed_count: failed,
-        params_json: { purpose, results, provider_counts: providerCounts },
-      });
+      await job.update({ done, ok_count: ok, failed_count: failed });
     }
-    await job.update({ status: 'completed' });
+    await job.update({
+      status: 'completed',
+      params_json: { ...job.params_json, provider_counts: providerCounts },
+    });
   } catch (err) {
     await job.update({ status: 'failed', error_message: err.message });
   }
@@ -152,7 +191,7 @@ export async function resolveBulk(queries, { purpose, actor = 'api', provider } 
     kind: 'lookup_bulk',
     status: 'running',
     total: queries.length,
-    params_json: { purpose, results: [], provider_counts: {} },
+    params_json: { purpose },
   });
 
   const donePromise = runBulk(queries, { purpose, actor, provider }, job);

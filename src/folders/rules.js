@@ -54,7 +54,14 @@ async function runApplyRule(folder, job) {
 
     await setFolderPeers(pool, folder.tg_filter_id, fit.map((c) => c.tg_user_id));
     await syncMembers(folder.id);
-    await folder.update({ last_synced_at: new Date() });
+    // overflow soni va qo'llangan qoidaning nusxasi shu yerda saqlanadi —
+    // GET /api/folders har jild uchun resolveRule()ni qayta ishga
+    // tushirmasdan (N+1 so'rov) shundan o'qiydi.
+    await folder.update({
+      last_synced_at: new Date(),
+      last_overflow_count: overflow.length,
+      last_applied_rule_json: folder.rule_json,
+    });
 
     await job.update({
       status: 'completed',

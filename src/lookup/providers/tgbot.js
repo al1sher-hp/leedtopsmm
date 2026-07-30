@@ -1,5 +1,8 @@
-import { getPool } from '../../telegram/client.js';
+import { TelegramClient } from 'telegram';
+import { StringSession } from 'telegram/sessions/index.js';
 import config from '../../config/index.js';
+import { TelegramAccount } from '../../db/models.js';
+import { RateLimitedSession } from '../../telegram/client.js';
 import {
   ask,
   LookupSubscriptionRequiredError,
@@ -9,6 +12,53 @@ import { parseTelefonRaqamTopishbot } from '../bridge/parsers/telefonRaqamTopish
 import { isLikelyFinalMessage } from '../bridge/parsers/generic.js';
 
 export const PROVIDER_NAME = 'tgbot';
+
+// Kampaniya akkauntlari (getPool()) BALANS RISKINI shu bot bilan
+// baham ko'rmasligi kerak — tashqi bot noma'lum/shubhali xatti-harakatga ega
+// bo'lishi mumkin (docs/DATA-RISK.md), shuning uchun lookup UMUMIY pool'dan
+// ATAYLAB mustaqil, faqat shu maqsad uchun belgilangan (`label` bilan)
+// akkauntni ishlatadi. Bunday akkaunt topilmasa — UMUMIY getPool()ga HECH
+// QACHON tushib ketmaydi (fallback yo'q), aniq xato tashlanadi.
+export async function findLookupAccount() {
+  const account = await TelegramAccount.findOne({
+    where: { label: config.lookup.botAccountLabel, status: 'active' },
+  });
+  if (!account) {
+    throw new Error(
+      `Lookup uchun alohida akkaunt topilmadi (label: ${config.lookup.botAccountLabel}) — qo'shing`
+    );
+  }
+  return account;
+}
+
+// Bir marta ulanib, keyingi chaqiruvlarda qayta ishlatiladi (getPool()dagi
+// singleton naqshi bilan bir xil), lekin butunlay ALOHIDA ulanish —
+// SessionPool'ning bir qismi emas.
+let lookupClient = null;
+
+async function getLookupClient() {
+  if (lookupClient) return lookupClient;
+
+  const account = await findLookupAccount();
+  const rawClient = new TelegramClient(
+    new StringSession(account.session_string),
+    config.telegram.apiId,
+    config.telegram.apiHash,
+    { connectionRetries: 5 }
+  );
+  await rawClient.connect();
+
+  // botBridge.ask() pool-ga o'xshash interfeys kutadi (.invoke() +
+  // .primaryClient) — RateLimitedSession o'zining FloodWait/backoff/rate-limit
+  // mexanizmini shu (mustaqil) sessiya uchun alohida hisoblagichlar bilan
+  // ta'minlaydi (kampaniya trafigi bilan aralashmaydi).
+  const session = new RateLimitedSession(rawClient, 'lookup');
+  lookupClient = {
+    invoke: (request, opts) => session.invoke(request, opts),
+    primaryClient: rawClient,
+  };
+  return lookupClient;
+}
 
 // Bot holatini kuzatish uchun modul-darajasidagi holat — GET /api/lookup/providers
 // shundan o'qiydi ("obuna kerak"/"limit tugadi" bannerini ko'rsatish uchun).
@@ -38,10 +88,10 @@ export async function lookupViaTgBot(query) {
     throw new LookupQuotaExhaustedError('avvalgi tekshiruvda aniqlangan (kunlik limit)');
   }
 
-  const pool = await getPool();
+  const client = await getLookupClient();
 
   try {
-    const { text, code } = await ask(pool, config.lookup.botUsername, query, {
+    const { text, code } = await ask(client, config.lookup.botUsername, query, {
       timeoutMs: config.lookup.botTimeoutMs,
       minIntervalMs: config.lookup.minIntervalMs,
       isFinal: isLikelyFinalMessage,
@@ -80,4 +130,4 @@ export async function lookupViaTgBot(query) {
   }
 }
 
-export default { lookupViaTgBot, botState, resetBotState, PROVIDER_NAME };
+export default { lookupViaTgBot, botState, resetBotState, findLookupAccount, PROVIDER_NAME };

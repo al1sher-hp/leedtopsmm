@@ -9,18 +9,35 @@ import { Folder, FolderMember, DialogContact, JobRun } from '../db/models.js';
 import { getPool } from '../telegram/client.js';
 import { getAccountLimits, assertCanAddFolder, REGULAR_LIMITS } from '../folders/limits.js';
 import { listFolders, ensureFolder, deleteFolder } from '../folders/client.js';
-import { resolveRule, applyRule } from '../folders/rules.js';
+import { applyRule } from '../folders/rules.js';
 import { syncMembers } from '../folders/sync.js';
 
 const router = Router();
 
+// Ikkala qoida (eski JSONB va yangi JSONB) teng ekanini tekshiradi — kalit
+// tartibi farq qilishi mumkin bo'lgani uchun oddiy `===` yoki `JSON.stringify`
+// solishtirish YETARLI EMAS (masalan `{a:1,b:2}` vs `{b:2,a:1}`). DB'siz
+// sinaladigan sof funksiya — routes.js dagi buildWhere bilan bir xil naqsh.
+export function rulesEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) return false;
+  }
+  return true;
+}
+
 // GET /api/folders — DB'dagi jildlar + har biri uchun joriy limit/overflow
-// hisobi. Qoidasi bor har bir jild uchun resolveRule() qayta ishga
-// tushiriladi (500 ta kabi hajmlarda tez) — shunda overflow_count doim
-// so'nggi DialogContact holatiga mos, oxirgi "Qo'llash"dan beri eskirmagan
-// bo'ladi. Telegram limitini (premium/oddiy) aniqlab bo'lmasa (masalan
-// Vercel'da doimiy ulanish yo'q), standart (oddiy akkaunt) limitlar bilan
-// davom etiladi — bu sahifa har doim ochilishi kerak.
+// hisobi. `overflow_count` endi HAR SO'ROVDA resolveRule()ni qayta ishga
+// tushirmasdan (N+1 so'rov) — applyRule() so'nggi qo'llashda hisoblab,
+// Folder.last_overflow_count'ga yozib qo'ygan qiymatdan o'qiladi. Joriy
+// `rule_json` so'nggi qo'llangan (`last_applied_rule_json`) bilan mos
+// kelmasa — `stale: true` (qoida o'zgargan/hali qo'llanmagan, ko'rsatilgan
+// overflow_count eskirgan bo'lishi mumkin). Telegram limitini (premium/
+// oddiy) aniqlab bo'lmasa (masalan Vercel'da doimiy ulanish yo'q), standart
+// (oddiy akkaunt) limitlar bilan davom etiladi — bu sahifa har doim
+// ochilishi kerak.
 router.get('/', async (req, res) => {
   try {
     const folders = await Folder.findAll({ order: [['createdAt', 'ASC']] });
@@ -35,25 +52,17 @@ router.get('/', async (req, res) => {
       }
     }
 
-    const data = await Promise.all(
-      folders.map(async (folder) => {
-        let overflow_count = 0;
-        if (folder.rule_json) {
-          try {
-            const matches = await resolveRule(folder.rule_json);
-            overflow_count = Math.max(0, matches.length - limits.maxPeersPerFolder);
-          } catch (err) {
-            console.error(`[folders] #${folder.id} qoidasini baholab bo'lmadi:`, err.message);
-          }
-        }
-        return {
-          ...folder.toJSON(),
-          limit: limits.maxPeersPerFolder,
-          overflow_count,
-          truncated: overflow_count > 0,
-        };
-      })
-    );
+    const data = folders.map((folder) => {
+      const overflow_count = folder.last_overflow_count || 0;
+      const stale = Boolean(folder.rule_json) && !rulesEqual(folder.rule_json, folder.last_applied_rule_json);
+      return {
+        ...folder.toJSON(),
+        limit: limits.maxPeersPerFolder,
+        overflow_count,
+        truncated: overflow_count > 0,
+        stale,
+      };
+    });
 
     res.json({ data, limits });
   } catch (err) {

@@ -217,7 +217,7 @@ export default function FoldersPage() {
           ? 'bg-amber-100 text-amber-700'
           : 'bg-emerald-100 text-emerald-700',
     },
-    meta: f.managed_by_us ? 'Boshqariladi' : "Telegram'dan sinxronlangan",
+    meta: `${f.managed_by_us ? 'Boshqariladi' : "Telegram'dan sinxronlangan"}${f.stale ? ' · eskirgan' : ''}`,
     errorText: f.truncated ? `${f.overflow_count} ta kontakt jildga sig'madi` : null,
     downloadUrl: f.peer_count > 0 ? exportFolderXlsxUrl(f.id) : null,
   }));
@@ -366,9 +366,17 @@ export default function FoldersPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
-                <h3 className="text-sm font-semibold text-gray-700">
+                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   {selectedFolder.emoticon ? `${selectedFolder.emoticon} ` : ''}
                   {selectedFolder.title}
+                  {selectedFolder.stale && (
+                    <span
+                      title="Qoida so'nggi qo'llashdan beri o'zgargan (yoki hali qo'llanmagan) — quyidagi sonlar eskirgan bo'lishi mumkin"
+                      className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700"
+                    >
+                      eskirgan
+                    </span>
+                  )}
                 </h3>
                 <RuleSummary rule={selectedFolder.rule_json} />
               </div>

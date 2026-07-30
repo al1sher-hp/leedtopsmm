@@ -41,15 +41,21 @@ export async function put(query, result) {
 }
 
 // Kunlik interval bilan chaqiriladi (src/api/app.js -> startLookupPurge()):
-// 1) muddati o'tgan (expires_at <= now) qatorlarni BUTUNLAY o'chiradi —
-//    bu README'dagi "hech bir yozuv o'chirilmaydi" qoidasining Lead/
-//    DialogContact'dan farqli, shu topshiriqda ATAYLAB talab qilingan
-//    ikkinchi istisnosi (PhoneLookup — snapshot kesh, asosiy ma'lumot emas).
+// 1) muddati o'tgan (expires_at <= now), hali tozalanmagan (purged_at: null)
+//    qatorlarning FAQAT nozik maydonlarini (phone, raw_response) tozalaydi
+//    va `purged_at`ni belgilaydi — qator O'ZI o'chirilmaydi. Shunda "bu
+//    so'rov qidirilgan edi" fakti (audit/tarix uchun) saqlanib qoladi,
+//    raqamning o'zi esa 30 kundan keyin yo'q bo'ladi. `purged_at: null`
+//    sharti — allaqachon tozalangan qatorlarni har kuni qayta "yangilab"
+//    (updatedAt'ini o'zgartirib) yubormaslik uchun.
 // 2) hali muddati tugamagan, lekin `LOOKUP_RAW_RETENTION_DAYS`dan eski
 //    qatorlarning faqat raw_response'ini tozalaydi (xom bot javobi uzoq
 //    saqlanmasin — o'zi ham nozik ma'lumot bo'lishi mumkin).
 export async function purgeExpired() {
-  const expiredCount = await PhoneLookup.destroy({ where: { expires_at: { [Op.lte]: new Date() } } });
+  const [expiredCount] = await PhoneLookup.update(
+    { phone: null, raw_response: null, purged_at: new Date() },
+    { where: { expires_at: { [Op.lte]: new Date() }, purged_at: null } }
+  );
 
   const rawCutoff = new Date(Date.now() - config.lookup.rawRetentionDays * 24 * 60 * 60 * 1000);
   const [rawCleared] = await PhoneLookup.update(

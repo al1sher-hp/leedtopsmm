@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DialogContact, Folder, FolderMember, LookupAudit, JobRun, PhoneLookup,
+  DialogContact, Folder, FolderMember, LookupAudit, JobRun, PhoneLookup, LookupJobResult,
 } from '../src/db/models.js';
 
 // Bu test HAQIQIY DB'ga ulanmaydi — sequelize.sync()/authenticate() emas,
@@ -71,9 +71,15 @@ describe('Folder', () => {
     const attrs = attrNames(Folder);
     for (const col of [
       'tg_filter_id', 'title', 'emoticon', 'peer_count', 'managed_by_us', 'rule_json', 'last_synced_at',
+      'last_overflow_count', 'last_applied_rule_json',
     ]) {
       expect(attrs).toContain(col);
     }
+  });
+
+  it('last_overflow_count notNull default 0', () => {
+    expect(Folder.rawAttributes.last_overflow_count.allowNull).toBe(false);
+    expect(Folder.rawAttributes.last_overflow_count.defaultValue).toBe(0);
   });
 
   it('title notNull, tg_filter_id null bo\'lishi mumkin', () => {
@@ -189,7 +195,7 @@ describe('PhoneLookup (kengaytirilgan ustunlar)', () => {
     for (const col of ['contact_type', 'contact_value', 'phone', 'tg_user_id', 'first_name', 'last_name', 'is_bot']) {
       expect(attrs).toContain(col); // eski ustunlar
     }
-    for (const col of ['provider', 'found', 'confidence', 'raw_response', 'source_note', 'expires_at']) {
+    for (const col of ['provider', 'found', 'confidence', 'raw_response', 'source_note', 'expires_at', 'purged_at']) {
       expect(attrs).toContain(col); // yangi ustunlar
     }
   });
@@ -202,5 +208,32 @@ describe('PhoneLookup (kengaytirilgan ustunlar)', () => {
   it('contact_value va expires_at bo\'yicha index bor', () => {
     expect(hasIndex(PhoneLookup, ['contact_value'], false)).toBe(true);
     expect(hasIndex(PhoneLookup, ['expires_at'], false)).toBe(true);
+  });
+
+  it("purged_at ixtiyoriy (allowNull) — purgeExpired() faqat shu ustunni to'ldiradi, qatorni o'chirmaydi", () => {
+    expect(PhoneLookup.rawAttributes.purged_at.allowNull).toBe(true);
+  });
+});
+
+describe('LookupJobResult', () => {
+  it('tableName va majburiy ustunlarga ega', () => {
+    expect(LookupJobResult.getTableName()).toBe('lookup_job_results');
+    const attrs = attrNames(LookupJobResult);
+    for (const col of [
+      'job_id', 'query', 'found', 'phone', 'provider', 'confidence',
+      'first_name', 'last_name', 'error_message', 'error_code',
+    ]) {
+      expect(attrs).toContain(col);
+    }
+  });
+
+  it('job_id va query notNull, found default false', () => {
+    expect(LookupJobResult.rawAttributes.job_id.allowNull).toBe(false);
+    expect(LookupJobResult.rawAttributes.query.allowNull).toBe(false);
+    expect(LookupJobResult.rawAttributes.found.defaultValue).toBe(false);
+  });
+
+  it("job_id bo'yicha index bor (append-only o'qish tez bo'lishi uchun)", () => {
+    expect(hasIndex(LookupJobResult, ['job_id'], false)).toBe(true);
   });
 });

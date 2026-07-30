@@ -6,7 +6,7 @@
 import { Router } from 'express';
 import { Op } from 'sequelize';
 import * as XLSX from 'xlsx';
-import { JobRun, LookupAudit } from '../db/models.js';
+import { JobRun, LookupAudit, LookupJobResult } from '../db/models.js';
 import { resolve, resolveBulk } from '../lookup/index.js';
 import { botState } from '../lookup/providers/tgbot.js';
 import config from '../config/index.js';
@@ -55,12 +55,31 @@ router.post('/bulk', async (req, res) => {
   }
 });
 
-// GET /api/lookup/jobs/:id — progress + provider taqsimoti
+// GET /api/lookup/jobs/:id?page=&limit= — progress + provider taqsimoti +
+// sahifalangan natijalar (LookupJobResult'dan — endi JobRun.params_json
+// ichida emas, qarang: runBulk() izohi src/lookup/index.js'da).
 router.get('/jobs/:id', async (req, res) => {
   try {
     const job = await JobRun.findByPk(req.params.id);
     if (!job || job.kind !== 'lookup_bulk') return res.status(404).json({ error: 'Job topilmadi' });
-    res.json({ data: job, provider_counts: job.params_json?.provider_counts || {} });
+
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 500);
+    const offset = (page - 1) * limit;
+
+    const { rows, count } = await LookupJobResult.findAndCountAll({
+      where: { job_id: job.id },
+      order: [['id', 'ASC']],
+      limit,
+      offset,
+    });
+
+    res.json({
+      data: job,
+      provider_counts: job.params_json?.provider_counts || {},
+      results: rows,
+      results_pagination: { page, limit, total: count, totalPages: Math.ceil(count / limit) },
+    });
   } catch (err) {
     console.error('[lookup] GET /jobs/:id xato:', err);
     res.status(500).json({ error: 'Server xatosi' });
@@ -72,7 +91,7 @@ router.get('/jobs/:id/export.xlsx', async (req, res) => {
     const job = await JobRun.findByPk(req.params.id);
     if (!job || job.kind !== 'lookup_bulk') return res.status(404).json({ error: 'Job topilmadi' });
 
-    const results = job.params_json?.results || [];
+    const results = await LookupJobResult.findAll({ where: { job_id: job.id }, order: [['id', 'ASC']] });
     const rows = results.map((r) => ({
       Query: r.query,
       Topildi: r.found ? 'Ha' : "Yo'q",
@@ -80,7 +99,7 @@ router.get('/jobs/:id/export.xlsx', async (req, res) => {
       Ism: [r.first_name, r.last_name].filter(Boolean).join(' '),
       Provider: r.provider || '',
       Ishonchlilik: r.confidence === 'verified' ? 'Tasdiqlangan' : r.confidence === 'unverified' ? 'Tasdiqlanmagan' : '',
-      Xato: r.error || '',
+      Xato: r.error_message || '',
     }));
 
     const wb = XLSX.utils.book_new();
@@ -103,7 +122,13 @@ router.get('/providers', async (req, res) => {
   try {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-    const usedToday = await LookupAudit.count({ where: { createdAt: { [Op.gte]: startOfDay } } });
+    // guard.js dagi countToday() bilan bir xil hisob — faqat haqiqiy tashqi
+    // (tgbot) so'rovlari kunlik cap'ga ta'sir qiladi, shu yerda ham xuddi
+    // shu ta'rif ko'rsatiladi (aks holda UI'dagi son cap'ni belgilaydigan
+    // haqiqiy sondan farqli bo'lib qolardi).
+    const usedToday = await LookupAudit.count({
+      where: { createdAt: { [Op.gte]: startOfDay }, provider: 'tgbot' },
+    });
 
     res.json({
       chain: config.lookup.providerChain,

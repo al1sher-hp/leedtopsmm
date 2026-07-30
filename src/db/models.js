@@ -574,6 +574,14 @@ PhoneLookup.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    // purgeExpired() (src/lookup/cache.js) muddati o'tgan qatorni O'CHIRMAYDI
+    // — faqat nozik maydonlarni (phone/raw_response) tozalab, shu vaqtni
+    // qayd etadi. Shunda "bu so'rov qidirilgan edi" fakti tarixda qoladi,
+    // raqamning o'zi qolmaydi.
+    purged_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     sequelize,
@@ -666,6 +674,14 @@ Folder.init(
     managed_by_us: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     rule_json: { type: DataTypes.JSONB, allowNull: true },
     last_synced_at: { type: DataTypes.DATE, allowNull: true },
+    // applyRule() (src/folders/rules.js) so'nggi qo'llashda hisoblagan
+    // overflow sonini shu yerga yozadi — GET /api/folders har safar
+    // resolveRule()ni qayta ishga tushirmasdan (N+1) shundan o'qiydi.
+    last_overflow_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // So'nggi muvaffaqiyatli qo'llashda ISHLATILGAN qoidaning nusxasi —
+    // joriy `rule_json` bilan solishtirib, "qoida qo'llashdan beri
+    // o'zgargan (eskirgan natija)" holatini aniqlash uchun.
+    last_applied_rule_json: { type: DataTypes.JSONB, allowNull: true },
   },
   {
     sequelize,
@@ -754,8 +770,38 @@ JobRun.init(
   }
 );
 
+// ─── Lookup bulk natijalari: bitta-bitta qo'shiladigan (append-only) ────────
+// Avval bulk lookup natijalari JobRun.params_json ichidagi massivga har
+// iteratsiyada QAYTA YOZILARDI (O(n^2) — 5000 tagacha so'rov ruxsat etilgani
+// uchun bu sezilarli DB yukiga olib kelardi). Endi har natija shu jadvalga
+// bitta INSERT bilan (append) qo'shiladi, JobRun esa faqat kichik sanoq
+// maydonlarini (done/ok_count/failed_count) yangilaydi.
+export class LookupJobResult extends Model {}
+
+LookupJobResult.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    job_id: { type: DataTypes.INTEGER, allowNull: false },
+    query: { type: DataTypes.STRING, allowNull: false },
+    found: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    phone: { type: DataTypes.STRING, allowNull: true },
+    provider: { type: DataTypes.STRING, allowNull: true },
+    confidence: { type: DataTypes.ENUM('verified', 'unverified'), allowNull: true },
+    first_name: { type: DataTypes.STRING, allowNull: true },
+    last_name: { type: DataTypes.STRING, allowNull: true },
+    error_message: { type: DataTypes.TEXT, allowNull: true },
+    error_code: { type: DataTypes.STRING, allowNull: true },
+  },
+  {
+    sequelize,
+    modelName: 'LookupJobResult',
+    tableName: 'lookup_job_results',
+    indexes: [{ fields: ['job_id'] }],
+  }
+);
+
 export default {
   Lead, BlacklistEntry, ScanSession, ScanResult, PipelineRun, PipelineRunLead,
   TelegramAccount, Campaign, CampaignTarget, CampaignReply, PhoneLookup,
-  DialogContact, Folder, FolderMember, LookupAudit, JobRun,
+  DialogContact, Folder, FolderMember, LookupAudit, JobRun, LookupJobResult,
 };
