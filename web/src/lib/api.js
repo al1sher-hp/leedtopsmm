@@ -267,6 +267,43 @@ export function wizardTwoFA(session_id, password) {
   return request('/api/outreach/accounts/create/2fa', { method: 'POST', body: JSON.stringify({ session_id, password }) }, PIPELINE_API_URL);
 }
 
+// ─── Jildlar (Telegram Dialog Filter) ─────────────────────────────────────────
+// Ro'yxat/a'zolar/eksport DB'dan o'qiladi (tez API host'i), yaratish/qo'llash/
+// sinxronlash/o'chirish esa jonli Telegram ulanishi (getPool()) talab qiladi —
+// pipeline/scan bilan bir xil sababga ko'ra doim-ishlaydigan hostga yuboriladi.
+export function fetchFolders() {
+  return request('/api/folders');
+}
+
+export function createFolder(data) {
+  return request('/api/folders', { method: 'POST', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+
+export function applyFolderRule(id) {
+  return request(`/api/folders/${id}/apply`, { method: 'POST' }, PIPELINE_API_URL);
+}
+
+export function fetchFolderJob(jobId) {
+  return request(`/api/folders/jobs/${jobId}`);
+}
+
+export function syncFolder(id) {
+  return request(`/api/folders/${id}/sync`, { method: 'POST' }, PIPELINE_API_URL);
+}
+
+export function fetchFolderMembers(id, params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return request(`/api/folders/${id}/members${q ? `?${q}` : ''}`);
+}
+
+export function exportFolderXlsxUrl(id) {
+  return `${API_URL}/api/folders/${id}/export.xlsx`;
+}
+
+export function deleteFolderEntry(id) {
+  return request(`/api/folders/${id}`, { method: 'DELETE' }, PIPELINE_API_URL);
+}
+
 export default {
   fetchLeads,
   fetchStats,
@@ -294,4 +331,12 @@ export default {
   exportScanSessionXlsxUrl,
   exportParticipants,
   promoteSessionToLead,
+  fetchFolders,
+  createFolder,
+  applyFolderRule,
+  fetchFolderJob,
+  syncFolder,
+  fetchFolderMembers,
+  exportFolderXlsxUrl,
+  deleteFolderEntry,
 };
