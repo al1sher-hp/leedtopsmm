@@ -215,4 +215,67 @@ router.get('/sync/status', async (req, res) => {
   }
 });
 
+// ─── Klassifikatsiya: premium'ga qiziqish tahlili ───────────────────────────
+let dialogsClassifyRunning = false;
+
+// POST /api/dialogs/classify  { keywords?, threshold?, ai_verify?, message_limit?, dialog_limit? }
+router.post('/classify', async (req, res) => {
+  if (process.env.VERCEL) {
+    return res.status(501).json({
+      error: "Klassifikatsiya Vercel serverless funksiyasida ishlamaydi (doimiy Telegram ulanishi kerak).",
+    });
+  }
+  if (dialogsClassifyRunning) {
+    return res.status(409).json({ error: 'Klassifikatsiya allaqachon ishlamoqda' });
+  }
+
+  try {
+    const { keywords, threshold, ai_verify, message_limit, dialog_limit } = req.body || {};
+    const { classifyDialogs } = await import('../dialogs/classify.js');
+
+    dialogsClassifyRunning = true;
+    const { jobId, donePromise } = await classifyDialogs({
+      keywords: Array.isArray(keywords) && keywords.length > 0 ? keywords : undefined,
+      threshold: threshold || undefined,
+      aiVerify: ai_verify === true,
+      messageLimit: message_limit || undefined,
+      dialogLimit: dialog_limit || undefined,
+    });
+    donePromise.catch((err) => console.error('[dialogs] classify xatosi:', err)).finally(() => {
+      dialogsClassifyRunning = false;
+    });
+
+    res.status(202).json({ message: 'Klassifikatsiya boshlandi', job_id: jobId });
+  } catch (err) {
+    dialogsClassifyRunning = false;
+    console.error('[dialogs] POST /classify xato:', err);
+    res.status(500).json({ error: err.message || 'Server xatosi' });
+  }
+});
+
+router.post('/classify/cancel', async (req, res) => {
+  if (process.env.VERCEL) {
+    return res.status(501).json({ error: "Bekor qilish Vercel serverless funksiyasida ishlamaydi." });
+  }
+  if (!dialogsClassifyRunning) {
+    return res.status(409).json({ error: 'Hech qanday klassifikatsiya hozir ishlamayapti' });
+  }
+
+  const { dialogsClassifyCancellation } = await import('../jobs/dialogsClassifyCancellation.js');
+  dialogsClassifyCancellation.cancel();
+
+  res.status(202).json({ message: "To'xtatish so'rovi yuborildi, bir necha soniyada to'xtaydi" });
+});
+
+// GET /api/dialogs/classify/status — progress + ETA (JobRun.params_json.eta_seconds)
+router.get('/classify/status', async (req, res) => {
+  try {
+    const job = await JobRun.findOne({ where: { kind: 'dialogs_classify' }, order: [['createdAt', 'DESC']] });
+    res.json({ data: job, running: dialogsClassifyRunning });
+  } catch (err) {
+    console.error('[dialogs] GET /classify/status xato:', err);
+    res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
 export default router;

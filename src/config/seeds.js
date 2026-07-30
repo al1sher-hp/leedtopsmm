@@ -35,4 +35,15 @@ export const UZ_OPERATOR_CODES = [
   '33', '88', '77', '20', '50',
 ];
 
-export default { SEARCH_KEYWORDS, CATALOG_CHANNELS, UZ_OPERATOR_CODES };
+// Lichka yozishmalarida Telegram Premium'ga qiziqishni aniqlash uchun kalit
+// so'zlar (src/dialogs/classify.js). So'z chegarasi bilan (butun so'z/ibora
+// sifatida) qidiriladi — "premiumniki" kabi ichiga singib ketgan holatlar
+// mos kelmaydi.
+export const PREMIUM_KEYWORDS = [
+  'premium', 'премиум', 'премиум подписка',
+  'obuna', 'подписка', 'подписку',
+  'tg premium', 'telegram premium',
+  'premium olmoqchi', 'premium kerak', 'premium qancha',
+];
+
+export default { SEARCH_KEYWORDS, CATALOG_CHANNELS, UZ_OPERATOR_CODES, PREMIUM_KEYWORDS };

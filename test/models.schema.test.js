@@ -33,7 +33,7 @@ describe('DialogContact', () => {
     for (const col of [
       'tg_user_id', 'username', 'first_name', 'last_name', 'phone', 'phone_source',
       'is_bot', 'is_premium', 'is_contact', 'is_mutual_contact', 'last_message_at',
-      'message_count', 'my_message_count', 'premium_mentions', 'classified_at', 'opted_out',
+      'message_count', 'my_message_count', 'premium_mentions', 'classified_at', 'opted_out', 'ai_rejected',
     ]) {
       expect(attrs).toContain(col);
     }
@@ -44,7 +44,7 @@ describe('DialogContact', () => {
   });
 
   it('BOOLEAN ustunlar notNull va default false', () => {
-    for (const col of ['is_bot', 'is_premium', 'is_contact', 'is_mutual_contact', 'opted_out']) {
+    for (const col of ['is_bot', 'is_premium', 'is_contact', 'is_mutual_contact', 'opted_out', 'ai_rejected']) {
       expect(DialogContact.rawAttributes[col].allowNull).toBe(false);
       expect(DialogContact.rawAttributes[col].defaultValue).toBe(false);
     }

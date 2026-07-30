@@ -334,6 +334,21 @@ export function fetchDialogsSyncStatus() {
   return request('/api/dialogs/sync/status', {}, PIPELINE_API_URL);
 }
 
+// Premium'ga qiziqish tahlili — Telegram (GetHistory) + ixtiyoriy Gemini
+// tekshiruvi talab qiladi, shuning uchun sync bilan bir xil doim-ishlaydigan
+// hostga yuboriladi.
+export function runDialogsClassify(data = {}) {
+  return request('/api/dialogs/classify', { method: 'POST', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+
+export function cancelDialogsClassify() {
+  return request('/api/dialogs/classify/cancel', { method: 'POST' }, PIPELINE_API_URL);
+}
+
+export function fetchDialogsClassifyStatus() {
+  return request('/api/dialogs/classify/status', {}, PIPELINE_API_URL);
+}
+
 export default {
   fetchLeads,
   fetchStats,
@@ -375,4 +390,7 @@ export default {
   runDialogsSync,
   cancelDialogsSync,
   fetchDialogsSyncStatus,
+  runDialogsClassify,
+  cancelDialogsClassify,
+  fetchDialogsClassifyStatus,
 };

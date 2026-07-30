@@ -620,6 +620,11 @@ DialogContact.init(
     my_message_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     premium_mentions: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     classified_at: { type: DataTypes.DATE, allowNull: true },
+    // premium_mentions threshold'dan o'tgan, lekin Gemini ikkinchi bosqichda
+    // "yo'q, bu odam haqiqatan premium sotib olishga qiziqmagan" degan
+    // xulosaga kelgan holatni belgilaydi — premium_mentions O'ZI o'zgarmaydi
+    // (kalit so'z hisobi haqiqiy qoladi), faqat shu bayroq true bo'ladi.
+    ai_rejected: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // Foydalanuvchi (dashboard orqali) "menga yozmang" deb belgilagan bo'lsa
     // — bu yozuv o'chirilmaydi (README'dagi "hech bir yozuv o'chirilmaydi"
     // qoidasi), faqat outreach/folder qo'llash bosqichlarida chetlab o'tiladi.
