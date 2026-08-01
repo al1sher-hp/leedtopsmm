@@ -7,18 +7,9 @@ import blacklistRoutes from './blacklistRoutes.js';
 import scanRoutes from './scanRoutes.js';
 import outreachRoutes from './outreachRoutes.js';
 import { startMonitor } from '../outreach/inboxMonitor.js';
+import { checkHealth } from '../db/health.js';
 
 const app = express();
-
-// So'nggi ma'lum DB ulanish holati — server.js (persistent entrypoint)
-// DB authenticate() natijasiga qarab shuni yangilaydi, /health shuni aks
-// ettiradi. Eslatma: Vercel serverless'da (api/index.js) bu hech qachon
-// chaqirilmaydi — har so'rov mustaqil bo'lgani uchun bu flag u yerda
-// ma'noli emas, faqat doim ishlaydigan (server.js) entrypoint uchun.
-let dbOk = false;
-export function setDbStatus(ok) {
-  dbOk = ok;
-}
 
 app.use(helmet());
 app.use(cors({ origin: config.api.corsOrigin }));
@@ -34,11 +25,17 @@ app.use('/api', routes);
 // Inbox monitorini server.js (doim ishlaydigan) ichida ishga tushirish —
 // Vercel'da bu import zanjirida qoladi lekin `start()` chaqirilmaydi,
 // shuning uchun setInterval real Vercel funksiyasida hech qachon tugamaydi.
-// Persistent server uchun: server.js'dan setDbStatus(true) chaqirilgach monitor ham boshlanadi.
 export function startInboxMonitor() {
   startMonitor(5 * 60_000); // har 5 daqiqa
 }
-app.get('/health', (req, res) => res.json({ ok: dbOk, db: dbOk }));
+
+// Faqat ulanishni emas, sxemani (kutilgan jadvallar mavjudligini) ham har
+// so'rovda JONLI tekshiradi — shuning uchun Vercel serverless'da ham (u yerda
+// server.js hech qachon ishga tushmaydi) to'g'ri natija beradi.
+app.get('/health', async (req, res) => {
+  const health = await checkHealth();
+  res.status(health.ok ? 200 : 503).json(health);
+});
 
 // Global xato handler — yuqoridagi route'lardan birortasida kutilmagan
 // (try/catch qamrab olmagan) xato tashlansa ham, oqim (masalan CSV eksport)

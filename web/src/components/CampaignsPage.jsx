@@ -4,6 +4,7 @@ import {
   startCampaign, pauseCampaign, addTargets, fetchTargets, fetchReplies,
   markReplyRead, respondToReply, triggerInboxCheck, fetchScanSessions,
 } from '../lib/api.js';
+import LoadState from './LoadState.jsx';
 
 const STATUS_COLORS = {
   draft:     'bg-gray-100 text-gray-700',
@@ -25,25 +26,29 @@ const TARGET_STATUS_LABELS = {
 function CampaignList({ onSelect, refresh }) {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetchCampaigns();
       setCampaigns(res.data || []);
-    } catch (e) { console.error(e); }
+    } catch (e) { setLoadError(e.message); }
     finally { setLoading(false); }
   }, [refresh]);
 
   useEffect(() => { load(); }, [load]);
 
-  return loading ? (
-    <div className="text-center py-12 text-gray-400">Yuklanmoqda…</div>
-  ) : campaigns.length === 0 ? (
-    <div className="text-center py-12 text-gray-400">
-      <p className="text-lg mb-2">Kampaniya yo'q</p>
-      <p className="text-sm">Yangi kampaniya yarating</p>
-    </div>
-  ) : (
+  return (
+    <LoadState
+      loading={loading}
+      error={loadError}
+      onRetry={load}
+      empty={campaigns.length === 0}
+      emptyTitle="Kampaniya yo'q"
+      emptyHint="Yangi kampaniya yarating"
+    >
     <div className="grid gap-3">
       {campaigns.map((c) => (
         <button
@@ -70,6 +75,7 @@ function CampaignList({ onSelect, refresh }) {
         </button>
       ))}
     </div>
+    </LoadState>
   );
 }
 

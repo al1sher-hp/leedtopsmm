@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchBlacklist, requestBlacklist, verifyBlacklist, requestBlacklistRemoval } from '../lib/api.js';
+import { ErrorBanner } from './LoadState.jsx';
 
 const TYPE_LABELS = { channel: 'Kanal', group: 'Guruh', bot: 'Bot' };
 
@@ -48,15 +49,17 @@ export default function BlacklistPage() {
 
   const [entries, setEntries] = useState([]);
   const [loadingList, setLoadingList] = useState(false);
+  const [entriesError, setEntriesError] = useState(null);
   const [removeErrorId, setRemoveErrorId] = useState(null);
 
   const loadEntries = useCallback(async () => {
     setLoadingList(true);
+    setEntriesError(null);
     try {
       const res = await fetchBlacklist();
       setEntries(res.data);
     } catch (err) {
-      console.error(err);
+      setEntriesError(err.message);
     } finally {
       setLoadingList(false);
     }
@@ -171,7 +174,8 @@ export default function BlacklistPage() {
           Faol qora ro'yxat {entries.length > 0 ? `(${entries.length})` : ''}
         </h3>
         {loadingList && <div className="text-xs text-gray-400">yuklanmoqda...</div>}
-        {!loadingList && entries.length === 0 && (
+        {!loadingList && entriesError && <ErrorBanner message={entriesError} onRetry={loadEntries} />}
+        {!loadingList && !entriesError && entries.length === 0 && (
           <div className="text-xs text-gray-400">Hozircha hech kim qo'shilmagan.</div>
         )}
         <div className="flex flex-col divide-y divide-gray-100">

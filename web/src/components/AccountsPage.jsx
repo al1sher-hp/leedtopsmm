@@ -3,6 +3,7 @@ import {
   fetchAccounts, addAccount, verifyAccount, updateAccount, deleteAccount,
   wizardStart, wizardConfirm, wizardTwoFA,
 } from '../lib/api.js';
+import LoadState from './LoadState.jsx';
 
 const STATUS_COLORS = {
   active:      'bg-green-100 text-green-800',
@@ -141,6 +142,7 @@ function AccountWizard({ onSuccess, onCancel }) {
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [verifying, setVerifying] = useState(null);
@@ -148,11 +150,13 @@ export default function AccountsPage() {
   const [formError, setFormError] = useState('');
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetchAccounts();
       setAccounts(res.data || []);
     } catch (e) {
-      console.error(e);
+      setLoadError(e.message);
     } finally {
       setLoading(false);
     }
@@ -305,14 +309,14 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {loading ? (
-        <div className="text-center py-12 text-gray-400">Yuklanmoqda…</div>
-      ) : accounts.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          <p className="text-lg mb-2">Akkount yo'q</p>
-          <p className="text-sm">Outreach uchun kamida bitta Telegram akkaunt kerak</p>
-        </div>
-      ) : (
+      <LoadState
+        loading={loading}
+        error={loadError}
+        onRetry={load}
+        empty={accounts.length === 0}
+        emptyTitle="Akkount yo'q"
+        emptyHint="Outreach uchun kamida bitta Telegram akkaunt kerak"
+      >
         <div className="grid gap-3">
           {accounts.map((acc) => (
             <div key={acc.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-center gap-4">
@@ -355,7 +359,7 @@ export default function AccountsPage() {
             </div>
           ))}
         </div>
-      )}
+      </LoadState>
 
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700">
         <strong>Session string olish:</strong> Loyiha papkasida <code className="bg-blue-100 px-1 rounded">npm run login</code> buyrug'ini ishga tushiring, chiqqan sessiya qatorini bu yerga yapishtirib qo'shing.
