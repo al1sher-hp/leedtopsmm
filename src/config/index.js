@@ -35,6 +35,21 @@ export const config = {
     port: toInt(process.env.PORT, 4000),
     corsOrigin: process.env.CORS_ORIGIN || '*',
   },
+  lookup: {
+    // Provayderlar shu tartibda sinaladi — birinchi found:true qaytargani
+    // g'olib, qolganlari chaqirilmaydi (src/lookup/index.js).
+    providerChain: (process.env.LOOKUP_PROVIDER_CHAIN || 'gramjs,tgbot')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    botUsername: process.env.LOOKUP_BOT_USERNAME || 'Telefon_raqam_topishbot',
+    botAccountLabel: process.env.LOOKUP_BOT_ACCOUNT_LABEL || 'lookup',
+    botTimeoutMs: toInt(process.env.LOOKUP_BOT_TIMEOUT_MS, 25000),
+    minIntervalMs: toInt(process.env.LOOKUP_MIN_INTERVAL_MS, 4000),
+    dailyCap: toInt(process.env.LOOKUP_DAILY_CAP, 300),
+    cacheTtlDays: toInt(process.env.LOOKUP_CACHE_TTL_DAYS, 30),
+    rawRetentionDays: toInt(process.env.LOOKUP_RAW_RETENTION_DAYS, 7),
+  },
 };
 
 export default config;

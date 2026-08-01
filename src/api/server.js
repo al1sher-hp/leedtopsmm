@@ -1,4 +1,4 @@
-import app, { startInboxMonitor } from './app.js';
+import app, { startInboxMonitor, startLookupPurge } from './app.js';
 import config from '../config/index.js';
 import sequelize from '../db/index.js';
 import { closeStalePipelineRuns } from '../db/staleRuns.js';
@@ -12,6 +12,7 @@ async function start() {
     console.log('[api] DB ulanishi OK');
     await closeStalePipelineRuns().catch((err) => console.error('[api] osilib qolgan run tozalash xatosi:', err.message));
     startInboxMonitor();
+    startLookupPurge();
   } catch (err) {
     console.error('[api] DB ulanish xatosi:', err.message);
   }

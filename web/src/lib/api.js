@@ -264,6 +264,41 @@ export function lookupPhoneBulk(usernames) {
   }, PIPELINE_API_URL);
 }
 
+// ─── Nomer topish — provider zanjiri (T1 oxirgi bosqich) ──────────────────────
+// DIQQAT: docs/DATA-RISK.md. `provider`: 'auto' | 'gramjs' | 'tgbot'.
+export function lookupResolve(query, { purpose, provider } = {}) {
+  return request(
+    '/api/lookup/resolve',
+    { method: 'POST', body: JSON.stringify({ query, purpose, provider }) },
+    PIPELINE_API_URL
+  );
+}
+
+export function lookupBulkStart(queries, { purpose, provider } = {}) {
+  return request(
+    '/api/lookup/bulk',
+    { method: 'POST', body: JSON.stringify({ queries, purpose, provider }) },
+    PIPELINE_API_URL
+  );
+}
+
+export function fetchLookupJob(id) {
+  return request(`/api/lookup/jobs/${id}`);
+}
+
+export function exportLookupJobXlsxUrl(id) {
+  return `${API_URL}/api/lookup/jobs/${id}/export.xlsx`;
+}
+
+export function fetchLookupProviders() {
+  return request('/api/lookup/providers', {}, PIPELINE_API_URL);
+}
+
+export function fetchLookupAudit(params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return request(`/api/lookup/audit${q ? `?${q}` : ''}`);
+}
+
 // ─── Akkount yaratish wizard ───────────────────────────────────────────────────
 export function wizardStart(phone) {
   return request('/api/outreach/accounts/create/start', { method: 'POST', body: JSON.stringify({ phone }) }, PIPELINE_API_URL);
@@ -273,6 +308,88 @@ export function wizardConfirm(session_id, code) {
 }
 export function wizardTwoFA(session_id, password) {
   return request('/api/outreach/accounts/create/2fa', { method: 'POST', body: JSON.stringify({ session_id, password }) }, PIPELINE_API_URL);
+}
+
+// ─── Jildlar (Telegram Dialog Filter) ─────────────────────────────────────────
+// Ro'yxat/a'zolar/eksport DB'dan o'qiladi (tez API host'i), yaratish/qo'llash/
+// sinxronlash/o'chirish esa jonli Telegram ulanishi (getPool()) talab qiladi —
+// pipeline/scan bilan bir xil sababga ko'ra doim-ishlaydigan hostga yuboriladi.
+export function fetchFolders() {
+  return request('/api/folders');
+}
+
+export function createFolder(data) {
+  return request('/api/folders', { method: 'POST', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+
+export function applyFolderRule(id) {
+  return request(`/api/folders/${id}/apply`, { method: 'POST' }, PIPELINE_API_URL);
+}
+
+export function fetchFolderJob(jobId) {
+  return request(`/api/folders/jobs/${jobId}`);
+}
+
+export function syncFolder(id) {
+  return request(`/api/folders/${id}/sync`, { method: 'POST' }, PIPELINE_API_URL);
+}
+
+export function fetchFolderMembers(id, params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return request(`/api/folders/${id}/members${q ? `?${q}` : ''}`);
+}
+
+export function exportFolderXlsxUrl(id) {
+  return `${API_URL}/api/folders/${id}/export.xlsx`;
+}
+
+export function deleteFolderEntry(id) {
+  return request(`/api/folders/${id}`, { method: 'DELETE' }, PIPELINE_API_URL);
+}
+
+// ─── Dialoglar (lichka kontaktlari) ───────────────────────────────────────────
+// Ro'yxat/eksport/opted_out DB'dan o'qiladi (tez API host'i), sinxronlash esa
+// jonli Telegram ulanishi (getPool()) talab qiladi — pipeline/scan bilan bir
+// xil sababga ko'ra doim-ishlaydigan hostga yuboriladi.
+export function fetchDialogs(params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return request(`/api/dialogs${q ? `?${q}` : ''}`);
+}
+
+export function updateDialogOptedOut(id, opted_out) {
+  return request(`/api/dialogs/${id}`, { method: 'PATCH', body: JSON.stringify({ opted_out }) });
+}
+
+export function exportDialogsXlsxUrl(params = {}) {
+  const q = new URLSearchParams(cleanParams(params)).toString();
+  return `${API_URL}/api/dialogs/export.xlsx${q ? `?${q}` : ''}`;
+}
+
+export function runDialogsSync(data = {}) {
+  return request('/api/dialogs/sync', { method: 'POST', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+
+export function cancelDialogsSync() {
+  return request('/api/dialogs/sync/cancel', { method: 'POST' }, PIPELINE_API_URL);
+}
+
+export function fetchDialogsSyncStatus() {
+  return request('/api/dialogs/sync/status', {}, PIPELINE_API_URL);
+}
+
+// Premium'ga qiziqish tahlili — Telegram (GetHistory) + ixtiyoriy Gemini
+// tekshiruvi talab qiladi, shuning uchun sync bilan bir xil doim-ishlaydigan
+// hostga yuboriladi.
+export function runDialogsClassify(data = {}) {
+  return request('/api/dialogs/classify', { method: 'POST', body: JSON.stringify(data) }, PIPELINE_API_URL);
+}
+
+export function cancelDialogsClassify() {
+  return request('/api/dialogs/classify/cancel', { method: 'POST' }, PIPELINE_API_URL);
+}
+
+export function fetchDialogsClassifyStatus() {
+  return request('/api/dialogs/classify/status', {}, PIPELINE_API_URL);
 }
 
 export default {
@@ -302,4 +419,27 @@ export default {
   exportScanSessionXlsxUrl,
   exportParticipants,
   promoteSessionToLead,
+  fetchFolders,
+  createFolder,
+  applyFolderRule,
+  fetchFolderJob,
+  syncFolder,
+  fetchFolderMembers,
+  exportFolderXlsxUrl,
+  deleteFolderEntry,
+  fetchDialogs,
+  updateDialogOptedOut,
+  exportDialogsXlsxUrl,
+  runDialogsSync,
+  cancelDialogsSync,
+  fetchDialogsSyncStatus,
+  runDialogsClassify,
+  cancelDialogsClassify,
+  fetchDialogsClassifyStatus,
+  lookupResolve,
+  lookupBulkStart,
+  fetchLookupJob,
+  exportLookupJobXlsxUrl,
+  fetchLookupProviders,
+  fetchLookupAudit,
 };

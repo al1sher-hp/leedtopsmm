@@ -544,15 +544,264 @@ PhoneLookup.init(
       allowNull: false,
       defaultValue: false,
     },
+    // Quyidagi ustunlar LookupAudit/DialogContact bilan bir xil "provayder +
+    // ishonchlilik" modelini ulash uchun qo'shildi — provider qaysi manba
+    // (masalan 'telegram', keyinroq boshqa lookup xizmatlari) natija
+    // berganini, confidence esa natija Telegram'ning o'zidan (verified) yoki
+    // uchinchi tomon taxminidan (unverified) kelganini bildiradi.
+    provider: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    found: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    confidence: {
+      type: DataTypes.ENUM('verified', 'unverified'),
+      allowNull: true,
+    },
+    raw_response: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    source_note: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    expires_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    // purgeExpired() (src/lookup/cache.js) muddati o'tgan qatorni O'CHIRMAYDI
+    // — faqat nozik maydonlarni (phone/raw_response) tozalab, shu vaqtni
+    // qayd etadi. Shunda "bu so'rov qidirilgan edi" fakti tarixda qoladi,
+    // raqamning o'zi qolmaydi.
+    purged_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     sequelize,
     modelName: 'PhoneLookup',
     tableName: 'phone_lookups',
+    indexes: [{ fields: ['contact_value'] }, { fields: ['expires_at'] }],
+  }
+);
+
+// ─── Dialoglar: shaxsiy suhbatdoshlar keshi ─────────────────────────────────
+// Userbot'ning barcha shaxsiy dialoglarini (getDialogs) davriy sinxronlash
+// natijasi — har bir Telegram foydalanuvchisi uchun bitta qator, ScanResult
+// singari "bitta skanerlashga bog'liq" emas, doimiy yangilanib turadigan
+// keshdir (shuning uchun scan_session_id kabi bog'lanish yo'q).
+export class DialogContact extends Model {}
+
+DialogContact.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    tg_user_id: {
+      // Unique cheklov faqat pastdagi `indexes`da — sababi models.js
+      // boshidagi Lead.channel_id izohida yozilgan (dublikat constraint
+      // muammosi).
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    username: { type: DataTypes.STRING, allowNull: true },
+    first_name: { type: DataTypes.STRING, allowNull: true },
+    last_name: { type: DataTypes.STRING, allowNull: true },
+    phone: { type: DataTypes.STRING, allowNull: true },
+    // Telefon qayerdan olinganini bildiradi — 'telegram' (getDialogs/entity
+    // ochiq bergan), 'lookup' (PhoneLookup orqali qo'lda qidirilgan) yoki
+    // 'manual' (operator qo'lda kiritgan).
+    phone_source: {
+      type: DataTypes.ENUM('telegram', 'lookup', 'manual'),
+      allowNull: true,
+    },
+    is_bot: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    is_premium: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    is_contact: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    is_mutual_contact: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    last_message_at: { type: DataTypes.DATE, allowNull: true },
+    message_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    my_message_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    premium_mentions: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    classified_at: { type: DataTypes.DATE, allowNull: true },
+    // premium_mentions threshold'dan o'tgan, lekin Gemini ikkinchi bosqichda
+    // "yo'q, bu odam haqiqatan premium sotib olishga qiziqmagan" degan
+    // xulosaga kelgan holatni belgilaydi — premium_mentions O'ZI o'zgarmaydi
+    // (kalit so'z hisobi haqiqiy qoladi), faqat shu bayroq true bo'ladi.
+    ai_rejected: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Foydalanuvchi (dashboard orqali) "menga yozmang" deb belgilagan bo'lsa
+    // — bu yozuv o'chirilmaydi (README'dagi "hech bir yozuv o'chirilmaydi"
+    // qoidasi), faqat outreach/folder qo'llash bosqichlarida chetlab o'tiladi.
+    opted_out: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  },
+  {
+    sequelize,
+    modelName: 'DialogContact',
+    tableName: 'dialog_contacts',
+    indexes: [
+      { unique: true, fields: ['tg_user_id'] },
+      { fields: ['opted_out'] },
+      { fields: ['premium_mentions'] },
+      { fields: ['is_premium'] },
+    ],
+  }
+);
+
+// ─── Papkalar: Telegram Folder (Dialog Filter) ko'chirmasi ──────────────────
+// Telegram'dagi chat papkalarining lokal aksi. `tg_filter_id` null bo'lishi
+// mumkin — papka avval bizning tizimda (rule_json bilan) loyihalashtirilib,
+// keyin "Telegram'da yaratish" bosqichida haqiqiy filter'ga aylantiriladi.
+export class Folder extends Model {}
+
+Folder.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    tg_filter_id: {
+      // Unique cheklov faqat pastdagi `indexes`da (Lead.channel_id bilan bir
+      // xil sabab). Postgres'da UNIQUE index bir nechta NULL qiymatga
+      // to'sqinlik qilmaydi, shuning uchun hali Telegram'da yaratilmagan
+      // (tg_filter_id = null) bir nechta papka bemalol yonma-yon turaveradi.
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    title: { type: DataTypes.STRING, allowNull: false },
+    emoticon: { type: DataTypes.STRING, allowNull: true },
+    peer_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    managed_by_us: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    rule_json: { type: DataTypes.JSONB, allowNull: true },
+    last_synced_at: { type: DataTypes.DATE, allowNull: true },
+    // applyRule() (src/folders/rules.js) so'nggi qo'llashda hisoblagan
+    // overflow sonini shu yerga yozadi — GET /api/folders har safar
+    // resolveRule()ni qayta ishga tushirmasdan (N+1) shundan o'qiydi.
+    last_overflow_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // So'nggi muvaffaqiyatli qo'llashda ISHLATILGAN qoidaning nusxasi —
+    // joriy `rule_json` bilan solishtirib, "qoida qo'llashdan beri
+    // o'zgargan (eskirgan natija)" holatini aniqlash uchun.
+    last_applied_rule_json: { type: DataTypes.JSONB, allowNull: true },
+  },
+  {
+    sequelize,
+    modelName: 'Folder',
+    tableName: 'folders',
+    indexes: [{ unique: true, fields: ['tg_filter_id'] }],
+  }
+);
+
+export class FolderMember extends Model {}
+
+FolderMember.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    folder_id: { type: DataTypes.INTEGER, allowNull: false },
+    tg_user_id: { type: DataTypes.STRING, allowNull: false },
+    added_at: { type: DataTypes.DATE, allowNull: false },
+  },
+  {
+    sequelize,
+    modelName: 'FolderMember',
+    tableName: 'folder_members',
+    indexes: [{ unique: true, fields: ['folder_id', 'tg_user_id'] }],
+  }
+);
+
+// ─── Lookup audit: qidiruv so'rovlarining hisobot izi ───────────────────────
+// Har bir telefon/username qidiruvi (qo'lda yoki bulk job orqali) shu yerga
+// yoziladi — nazorat va suiiste'mol tekshiruvi uchun. To'liq telefon raqami
+// bu yerda SAQLANMAYDI, faqat niqoblangan ko'rinishi (masalan +9989****1234) —
+// audit jurnali o'zi maxfiy ma'lumot manbaiga aylanib qolmasligi uchun.
+export class LookupAudit extends Model {}
+
+LookupAudit.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    query_type: { type: DataTypes.STRING, allowNull: false, defaultValue: 'username' },
+    query_value: { type: DataTypes.STRING, allowNull: false },
+    provider: { type: DataTypes.STRING, allowNull: false },
+    found: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // 'api' | 'job:dialogs' | 'job:folders' — so'rov qayerdan kelganini
+    // bildiradi (qo'lda API orqalimi yoki fon job orqalimi).
+    actor: { type: DataTypes.STRING, allowNull: false },
+    purpose: { type: DataTypes.TEXT, allowNull: true },
+    result_phone_masked: { type: DataTypes.STRING, allowNull: true },
+  },
+  {
+    sequelize,
+    modelName: 'LookupAudit',
+    tableName: 'lookup_audits',
+    indexes: [{ fields: ['createdAt'] }, { fields: ['provider'] }, { fields: ['query_value'] }],
+  }
+);
+
+// ─── Job Run: fon vazifalarining umumiy holati ──────────────────────────────
+// PipelineRun/ScanSession'ga o'xshash "yugurish" yozuvi, lekin dialoglar
+// sinxronizatsiyasi, klassifikatsiya va bulk lookup kabi bir nechta turdagi
+// fon vazifasi uchun umumiy — har biriga alohida jadval ochish o'rniga
+// `kind` ustuni bilan farqlanadi.
+export class JobRun extends Model {}
+
+JobRun.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    kind: {
+      type: DataTypes.ENUM('dialogs_sync', 'dialogs_classify', 'lookup_bulk', 'folder_apply'),
+      allowNull: false,
+    },
+    status: {
+      type: DataTypes.ENUM('running', 'completed', 'cancelled', 'failed'),
+      allowNull: false,
+      defaultValue: 'running',
+    },
+    total: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    done: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    ok_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    failed_count: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    params_json: { type: DataTypes.JSONB, allowNull: true },
+    error_message: { type: DataTypes.TEXT, allowNull: true },
+  },
+  {
+    sequelize,
+    modelName: 'JobRun',
+    tableName: 'job_runs',
+    indexes: [{ fields: ['kind'] }, { fields: ['status'] }],
+  }
+);
+
+// ─── Lookup bulk natijalari: bitta-bitta qo'shiladigan (append-only) ────────
+// Avval bulk lookup natijalari JobRun.params_json ichidagi massivga har
+// iteratsiyada QAYTA YOZILARDI (O(n^2) — 5000 tagacha so'rov ruxsat etilgani
+// uchun bu sezilarli DB yukiga olib kelardi). Endi har natija shu jadvalga
+// bitta INSERT bilan (append) qo'shiladi, JobRun esa faqat kichik sanoq
+// maydonlarini (done/ok_count/failed_count) yangilaydi.
+export class LookupJobResult extends Model {}
+
+LookupJobResult.init(
+  {
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    job_id: { type: DataTypes.INTEGER, allowNull: false },
+    query: { type: DataTypes.STRING, allowNull: false },
+    found: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    phone: { type: DataTypes.STRING, allowNull: true },
+    provider: { type: DataTypes.STRING, allowNull: true },
+    confidence: { type: DataTypes.ENUM('verified', 'unverified'), allowNull: true },
+    first_name: { type: DataTypes.STRING, allowNull: true },
+    last_name: { type: DataTypes.STRING, allowNull: true },
+    error_message: { type: DataTypes.TEXT, allowNull: true },
+    error_code: { type: DataTypes.STRING, allowNull: true },
+  },
+  {
+    sequelize,
+    modelName: 'LookupJobResult',
+    tableName: 'lookup_job_results',
+    indexes: [{ fields: ['job_id'] }],
   }
 );
 
 export default {
   Lead, BlacklistEntry, ScanSession, ScanResult, PipelineRun, PipelineRunLead,
   TelegramAccount, Campaign, CampaignTarget, CampaignReply, PhoneLookup,
+  DialogContact, Folder, FolderMember, LookupAudit, JobRun, LookupJobResult,
 };

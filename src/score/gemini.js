@@ -129,4 +129,71 @@ export async function scoreLeads(leads, opts = {}) {
   return results;
 }
 
-export default { scoreLead, scoreLeads };
+const PREMIUM_INTEREST_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    interested: { type: Type.BOOLEAN },
+    reason: { type: Type.STRING },
+  },
+  required: ['interested', 'reason'],
+  propertyOrdering: ['interested', 'reason'],
+};
+
+function buildPremiumInterestPrompt(messageSamples) {
+  return `Sen Telegram lichka yozishmalarini tahlil qiluvchi yordamchisan. Quyida
+bitta foydalanuvchi (suhbatdosh) yozgan xabarlardan namuna berilgan — bular
+FAQAT o'sha odamning o'z xabarlari, bizning javoblarimiz emas.
+
+Ushbu xabarlar asosida foydalanuvchi Telegram Premium obunasini HAQIQATAN
+SOTIB OLISHGA qiziqqanmi (masalan narxini so'ragan, qanday sotib olish
+mumkinligini so'ragan, sotib olmoqchi ekanini aytgan) yoki "premium"/"obuna"
+so'zini boshqa, aloqasiz ma'noda ishlatganmi (masalan tovar sifatini
+ta'riflashda, boshqa xizmat haqida gapirganda) — shuni aniqla.
+
+Xabarlar:
+${messageSamples.map((m, i) => `${i + 1}. ${m}`).join('\n')}
+
+Faqat berilgan JSON schema bo'yicha javob qaytar.`;
+}
+
+/**
+ * Kalit so'z bo'yicha threshold'dan o'tgan nomzodni Gemini orqali ikkinchi
+ * marta tekshiradi — "haqiqatan premium sotib olishga qiziqqanmi, yoki
+ * so'z boshqa ma'noda ishlatilganmi". Xato bo'lsa (yoki javob tushunarsiz
+ * bo'lsa) NEYTRAL: `interested: true` qaytariladi — Gemini xatosi tufayli
+ * yaxshi nomzodni asossiz rad etib qo'ymaslik uchun (scoreLead'dagi bilan
+ * bir xil "hech qachon yo'qotmaslik" tamoyili).
+ */
+export async function verifyPremiumInterest(messageSamples, { retries = 2, delayMs = 400 } = {}) {
+  const prompt = buildPremiumInterestPrompt(messageSamples);
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: config.gemini.model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: PREMIUM_INTEREST_SCHEMA,
+        },
+      });
+
+      const rawText = response.text ?? response.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      const parsed = JSON.parse(stripJsonFence(rawText));
+      await sleep(delayMs);
+
+      return { interested: Boolean(parsed.interested), reason: parsed.reason || null };
+    } catch (err) {
+      console.warn(
+        `[gemini] premium qiziqish tekshiruvida xato (urinish ${attempt + 1}/${retries + 1}): ${err.message}`
+      );
+      if (attempt < retries) {
+        await sleep(delayMs * (attempt + 2));
+        continue;
+      }
+      return { interested: true, reason: `Gemini xatosi: ${err.message}` };
+    }
+  }
+}
+
+export default { scoreLead, scoreLeads, verifyPremiumInterest };
