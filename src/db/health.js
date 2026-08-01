@@ -1,13 +1,21 @@
 import { QueryTypes } from 'sequelize';
 import sequelize from './index.js';
 
-// Kutilayotgan jadvallar ro'yxati DINAMIK — sequelize.models'dan olinadi,
-// qo'lda yozilmaydi. Sabab: production'da 5 ta jadval yetishmagani bir necha
-// kun sezilmadi, chunki hech kim /health'ni yangi model qo'shilganda
-// yangilashni eslamadi. Dinamik ro'yxat bilan bu butunlay imkonsiz —
-// models.js'ga yangi model qo'shilishi bilanoq /health ham uni biladi.
+// `group_leads` moduli (migrations/0001_group_leads.sql, 0002_*.sql) xom SQL
+// orqali yaratiladi — Sequelize modeli emas, shuning uchun sequelize.models
+// ro'yxatida ko'rinmaydi va bu yerda qo'lda qo'shiladi.
+const RAW_SQL_TABLES = ['lead_sources', 'group_leads', 'suppression_list', 'export_batches', 'pipeline_keywords'];
+
+// Kutilayotgan jadvallar ro'yxati (Sequelize modellari qismi) DINAMIK —
+// sequelize.models'dan olinadi, qo'lda yozilmaydi. Sabab: production'da 5 ta
+// jadval yetishmagani bir necha kun sezilmadi, chunki hech kim /health'ni
+// yangi model qo'shilganda yangilashni eslamadi. Dinamik ro'yxat bilan bu
+// butunlay imkonsiz — models.js'ga yangi model qo'shilishi bilanoq /health
+// ham uni biladi. Xom SQL jadvallar (yuqorida) bunga kirmaydi — ular alohida
+// qo'shiladi.
 function expectedTables() {
-  return Array.from(new Set(Object.values(sequelize.models).map((m) => m.getTableName())));
+  const modelTables = Object.values(sequelize.models).map((m) => m.getTableName());
+  return Array.from(new Set([...modelTables, ...RAW_SQL_TABLES]));
 }
 
 /**

@@ -7,8 +7,16 @@ vi.mock('../src/db/index.js', () => ({ default: mockSequelize }));
 
 const { checkHealth } = await import('../src/db/health.js');
 
+// health.js'dagi RAW_SQL_TABLES bilan bir xil — group_leads moduli xom SQL
+// migratsiya orqali yaratiladi, sequelize.models'da ko'rinmaydi.
+const RAW_SQL_TABLES = ['lead_sources', 'group_leads', 'suppression_list', 'export_batches', 'pipeline_keywords'];
+
 function fakeModel(tableName) {
   return { getTableName: () => tableName };
+}
+
+function rows(...names) {
+  return names.map((tablename) => ({ tablename }));
 }
 
 beforeEach(() => {
@@ -17,31 +25,30 @@ beforeEach(() => {
 });
 
 describe('checkHealth', () => {
-  it('ok:true qaytaradi — barcha kutilgan jadval (sequelize.models) mavjud bo\'lsa', async () => {
+  it('ok:true qaytaradi — barcha kutilgan jadval (model + xom SQL) mavjud bo\'lsa', async () => {
     mockSequelize.models = {
       Lead: fakeModel('leads'),
       TelegramAccount: fakeModel('telegram_accounts'),
     };
-    queryMock.mockResolvedValue([{ tablename: 'leads' }, { tablename: 'telegram_accounts' }]);
+    queryMock.mockResolvedValue(rows('leads', 'telegram_accounts', ...RAW_SQL_TABLES));
 
     const result = await checkHealth();
 
-    expect(result).toEqual({
-      ok: true,
-      db: true,
-      tables: { expected: ['leads', 'telegram_accounts'], missing: [] },
-      migrationsNeeded: false,
-    });
+    expect(result.ok).toBe(true);
+    expect(result.db).toBe(true);
+    expect(result.migrationsNeeded).toBe(false);
+    expect(result.tables.missing).toEqual([]);
+    expect(result.tables.expected.sort()).toEqual(['leads', 'telegram_accounts', ...RAW_SQL_TABLES].sort());
   });
 
-  it('yetishmayotgan jadvalni nomi bilan aniqlaydi va migrationsNeeded:true qaytaradi', async () => {
+  it('yetishmayotgan model-jadvalni nomi bilan aniqlaydi va migrationsNeeded:true qaytaradi', async () => {
     mockSequelize.models = {
       Lead: fakeModel('leads'),
       TelegramAccount: fakeModel('telegram_accounts'),
       Campaign: fakeModel('campaigns'),
     };
-    // Faqat 'leads' mavjud — 'telegram_accounts' va 'campaigns' yetishmaydi
-    queryMock.mockResolvedValue([{ tablename: 'leads' }]);
+    // Faqat 'leads' + xom SQL jadvallar mavjud — 'telegram_accounts' va 'campaigns' yetishmaydi
+    queryMock.mockResolvedValue(rows('leads', ...RAW_SQL_TABLES));
 
     const result = await checkHealth();
 
@@ -57,11 +64,11 @@ describe('checkHealth', () => {
       Lead: fakeModel('leads'),
       NewFeatureModel: fakeModel('brand_new_table'),
     };
-    queryMock.mockResolvedValue([{ tablename: 'leads' }]);
+    queryMock.mockResolvedValue(rows('leads', ...RAW_SQL_TABLES));
 
     const result = await checkHealth();
 
-    expect(result.tables.expected.sort()).toEqual(['brand_new_table', 'leads'].sort());
+    expect(result.tables.expected.sort()).toEqual(['brand_new_table', 'leads', ...RAW_SQL_TABLES].sort());
     expect(result.tables.missing).toEqual(['brand_new_table']);
   });
 
@@ -70,11 +77,31 @@ describe('checkHealth', () => {
       A: fakeModel('leads'),
       B: fakeModel('leads'),
     };
-    queryMock.mockResolvedValue([{ tablename: 'leads' }]);
+    queryMock.mockResolvedValue(rows('leads', ...RAW_SQL_TABLES));
 
     const result = await checkHealth();
 
-    expect(result.tables.expected).toEqual(['leads']);
+    expect(result.tables.expected.filter((t) => t === 'leads')).toHaveLength(1);
+  });
+
+  it('model va xom SQL jadval nomi bir xil bo\'lib qolsa ham takrorlanmaydi (dedup)', async () => {
+    mockSequelize.models = { GroupLeadLike: fakeModel('group_leads') };
+    queryMock.mockResolvedValue(rows('group_leads'));
+
+    const result = await checkHealth();
+
+    expect(result.tables.expected.filter((t) => t === 'group_leads')).toHaveLength(1);
+  });
+
+  it('hech qanday model ro\'yxatdan o\'tmagan bo\'lsa ham xom SQL jadvallarni tekshiradi', async () => {
+    mockSequelize.models = {};
+    queryMock.mockResolvedValue([]);
+
+    const result = await checkHealth();
+
+    expect(result.tables.expected.sort()).toEqual([...RAW_SQL_TABLES].sort());
+    expect(result.tables.missing.sort()).toEqual([...RAW_SQL_TABLES].sort());
+    expect(result.migrationsNeeded).toBe(true);
   });
 
   it('DB ulanishi yiqilsa ok:false, db:false qaytaradi — sxema haqida "topilmadi" demaydi', async () => {
@@ -87,19 +114,5 @@ describe('checkHealth', () => {
     expect(result.db).toBe(false);
     expect(result.migrationsNeeded).toBe(false);
     expect(result.tables.missing).toEqual([]);
-  });
-
-  it('hech qanday model ro\'yxatdan o\'tmagan bo\'lsa ham xato tashlamaydi', async () => {
-    mockSequelize.models = {};
-    queryMock.mockResolvedValue([]);
-
-    const result = await checkHealth();
-
-    expect(result).toEqual({
-      ok: true,
-      db: true,
-      tables: { expected: [], missing: [] },
-      migrationsNeeded: false,
-    });
   });
 });
