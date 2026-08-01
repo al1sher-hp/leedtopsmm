@@ -1,0 +1,12 @@
+# VARIANT A overlay — serverda 80/443 allaqachon band (mavjud nginx/caddy bor).
+# Yangi proksi qo'shilmaydi; buning o'rniga web konteyneri faqat 127.0.0.1 ga
+# bog'lanadi va mavjud host-proksi shu portga murojaat qiladi
+# (qarang: nginx-leedtopsmm.conf.example).
+#
+# Ishlatish:
+#   docker compose -p leedtopsmm -f docker-compose.prod.yml -f docker-compose.prod.variantA.yml up -d
+
+services:
+  web:
+    ports:
+      - "127.0.0.1:8081:80"

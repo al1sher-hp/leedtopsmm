@@ -1,0 +1,27 @@
+# VARIANT B overlay — serverda 80/443 bo'sh (mavjud proksi yo'q).
+# Caddy shu compose loyihasi (leedtopsmm) ichida ishga tushadi va faqat
+# leedtopsmm_default tarmog'i orqali api/web konteynerlariga murojaat qiladi.
+#
+# Ishlatish:
+#   docker compose -p leedtopsmm -f docker-compose.prod.yml -f docker-compose.prod.caddy.yml up -d
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN majburiy — .env da belgilang}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
