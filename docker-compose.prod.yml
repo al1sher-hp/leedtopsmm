@@ -1,0 +1,70 @@
+name: leedtopsmm
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD majburiy — .env da belgilang}
+      POSTGRES_DB: leedtopsmm
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      API_ID: ${API_ID}
+      API_HASH: ${API_HASH}
+      SESSION: ${SESSION}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/leedtopsmm
+      PGSSL: ${PGSSL:-false}
+      PGSSL_REJECT_UNAUTHORIZED: ${PGSSL_REJECT_UNAUTHORIZED:-true}
+      MAX_REQUESTS_PER_HOUR: ${MAX_REQUESTS_PER_HOUR:-250}
+      MAX_REQUESTS_PER_DAY: ${MAX_REQUESTS_PER_DAY:-2000}
+      REQUEST_DELAY_MS: ${REQUEST_DELAY_MS:-3000}
+      REQUEST_DELAY_JITTER_MS: ${REQUEST_DELAY_JITTER_MS:-1500}
+      DISCOVERY_DEPTH: ${DISCOVERY_DEPTH:-2}
+      BLACKLIST_CACHE_TTL_MS: ${BLACKLIST_CACHE_TTL_MS:-60000}
+      PORT: 4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    restart: unless-stopped
+
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: node src/db/migrate.js
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/leedtopsmm
+      PGSSL: ${PGSSL:-false}
+      PGSSL_REJECT_UNAUTHORIZED: ${PGSSL_REJECT_UNAUTHORIZED:-true}
+
+volumes:
+  pgdata:
