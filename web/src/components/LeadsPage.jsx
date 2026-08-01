@@ -6,6 +6,7 @@ import LeadCard from './LeadCard.jsx';
 import LeadTable from './LeadTable.jsx';
 import Pagination from './Pagination.jsx';
 import FolderSidebar from './FolderSidebar.jsx';
+import { ErrorBanner } from './LoadState.jsx';
 import {
   fetchLeads,
   fetchStats,
@@ -105,9 +106,11 @@ export default function LeadsPage() {
   // (global ko'rinish, standart holat).
   const [runs, setRuns] = useState([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
+  const [runsError, setRunsError] = useState(null);
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [runDetail, setRunDetail] = useState(null);
   const [loadingRunDetail, setLoadingRunDetail] = useState(false);
+  const [runDetailError, setRunDetailError] = useState(null);
 
   const loadLeads = useCallback(async (f) => {
     setLoading(true);
@@ -134,11 +137,12 @@ export default function LeadsPage() {
 
   const loadRuns = useCallback(async () => {
     setLoadingRuns(true);
+    setRunsError(null);
     try {
       const res = await fetchPipelineRuns();
       setRuns(res.data);
     } catch (err) {
-      console.error(err);
+      setRunsError(err.message);
     } finally {
       setLoadingRuns(false);
     }
@@ -174,20 +178,26 @@ export default function LeadsPage() {
       .catch(() => {});
   }, []);
 
+  const loadRunDetail = useCallback((id) => {
+    setLoadingRunDetail(true);
+    setRunDetailError(null);
+    return fetchPipelineRunLeads(id)
+      .then((res) => setRunDetail(res))
+      .catch((err) => {
+        setRunDetail(null);
+        setRunDetailError(err.message);
+      })
+      .finally(() => setLoadingRunDetail(false));
+  }, []);
+
   useEffect(() => {
     if (selectedRunId === null) {
       setRunDetail(null);
+      setRunDetailError(null);
       return;
     }
-    setLoadingRunDetail(true);
-    fetchPipelineRunLeads(selectedRunId)
-      .then((res) => setRunDetail(res))
-      .catch((err) => {
-        console.error(err);
-        setRunDetail(null);
-      })
-      .finally(() => setLoadingRunDetail(false));
-  }, [selectedRunId]);
+    loadRunDetail(selectedRunId);
+  }, [selectedRunId, loadRunDetail]);
 
   const showingRun = selectedRunId !== null;
   const displayLeads = showingRun ? runDetail?.leads || [] : leads;
@@ -195,7 +205,7 @@ export default function LeadsPage() {
 
   const refreshCurrentView = () => {
     if (showingRun) {
-      fetchPipelineRunLeads(selectedRunId).then(setRunDetail).catch(() => {});
+      loadRunDetail(selectedRunId);
     } else {
       loadLeads(filters);
     }
@@ -395,10 +405,11 @@ export default function LeadsPage() {
           </>
         )}
 
-        {error && <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3">{error}</div>}
+        {error && <ErrorBanner message={error} onRetry={() => loadLeads(filters)} />}
+        {runDetailError && <ErrorBanner message={runDetailError} onRetry={() => loadRunDetail(selectedRunId)} />}
         {isLoading && <div className="text-sm text-gray-400 text-center py-4">yuklanmoqda...</div>}
 
-        {!isLoading && displayLeads.length === 0 && (
+        {!isLoading && !(showingRun ? runDetailError : error) && displayLeads.length === 0 && (
           <div className="text-sm text-gray-400 text-center py-8">Hech qanday lead topilmadi</div>
         )}
 
@@ -424,6 +435,8 @@ export default function LeadsPage() {
         onSelect={setSelectedRunId}
         onDelete={handleDeleteRun}
         loading={loadingRuns}
+        error={runsError}
+        onRetry={loadRuns}
         allOption="Hammasi"
         deleteWarning="Faqat guruhlash o'chadi — lead'lar saqlanib qoladi."
       />

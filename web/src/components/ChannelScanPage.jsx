@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import ContactBadge from './ContactBadge.jsx';
 import FolderSidebar from './FolderSidebar.jsx';
+import { ErrorBanner } from './LoadState.jsx';
 import {
   runChannelScan,
   cancelChannelScan,
@@ -102,20 +103,23 @@ export default function ChannelScanPage() {
 
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const [sessionsError, setSessionsError] = useState(null);
 
   // O'ng paneldagi papka tanlovi. null = hech narsa tanlanmagan (skanerlash
   // ketayotgan bo'lsa jonli holat, aks holda bo'sh holat ko'rsatiladi).
   const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [sessionDetail, setSessionDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [sessionDetailError, setSessionDetailError] = useState(null);
 
   const loadSessions = useCallback(async () => {
     setLoadingSessions(true);
+    setSessionsError(null);
     try {
       const res = await fetchScanSessions();
       setSessions(res.data);
     } catch (err) {
-      console.error(err);
+      setSessionsError(err.message);
     } finally {
       setLoadingSessions(false);
     }
@@ -135,21 +139,27 @@ export default function ChannelScanPage() {
       .catch(() => {});
   }, []);
 
+  const loadSessionDetail = useCallback((id) => {
+    setLoadingDetail(true);
+    setSessionDetailError(null);
+    return fetchScanSession(id)
+      .then((res) => setSessionDetail(res))
+      .catch((err) => {
+        setSessionDetail(null);
+        setSessionDetailError(err.message);
+      })
+      .finally(() => setLoadingDetail(false));
+  }, []);
+
   useEffect(() => {
     setPromoteResult(null);
     if (selectedSessionId === null) {
       setSessionDetail(null);
+      setSessionDetailError(null);
       return;
     }
-    setLoadingDetail(true);
-    fetchScanSession(selectedSessionId)
-      .then((res) => setSessionDetail(res))
-      .catch((err) => {
-        console.error(err);
-        setSessionDetail(null);
-      })
-      .finally(() => setLoadingDetail(false));
-  }, [selectedSessionId]);
+    loadSessionDetail(selectedSessionId);
+  }, [selectedSessionId, loadSessionDetail]);
 
   const pollStatus = () => {
     const interval = setInterval(async () => {
@@ -375,7 +385,10 @@ export default function ChannelScanPage() {
         {!showingLive && selectedSessionId !== null && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             {loadingDetail && <div className="text-sm text-gray-400">yuklanmoqda...</div>}
-            {!loadingDetail && sessionDetail && (
+            {!loadingDetail && sessionDetailError && (
+              <ErrorBanner message={sessionDetailError} onRetry={() => loadSessionDetail(selectedSessionId)} />
+            )}
+            {!loadingDetail && !sessionDetailError && sessionDetail && (
               <>
                 <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
                   <div>
@@ -489,6 +502,8 @@ export default function ChannelScanPage() {
         onSelect={setSelectedSessionId}
         onDelete={handleDeleteSession}
         loading={loadingSessions}
+        error={sessionsError}
+        onRetry={loadSessions}
         emptyText="Hozircha skanerlash o'tkazilmagan."
       />
     </div>

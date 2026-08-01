@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import LeadsPage from './components/LeadsPage.jsx';
 import BlacklistPage from './components/BlacklistPage.jsx';
 import ChannelScanPage from './components/ChannelScanPage.jsx';
 import CampaignsPage from './components/CampaignsPage.jsx';
 import AccountsPage from './components/AccountsPage.jsx';
 import PhoneLookupPage from './components/PhoneLookupPage.jsx';
+import { fetchHealth } from './lib/api.js';
 
 const TABS = [
   { id: 'leads',     label: "Lead'lar" },
@@ -17,9 +18,23 @@ const TABS = [
 
 export default function App() {
   const [view, setView] = useState('leads');
+  const [health, setHealth] = useState(null);
+
+  // Yuklanganda /health so'raladi — jadval yetishmasa (migrationsNeeded)
+  // production'da kunlar davomida sezilmasdan qolgan holat endi dashboard'ning
+  // eng yuqorisida, yopib bo'lmaydigan qizil banner bilan darhol ko'rinadi.
+  useEffect(() => {
+    fetchHealth().then(setHealth).catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
+      {health?.migrationsNeeded && (
+        <div className="bg-red-600 text-white text-sm px-4 py-2 text-center font-medium">
+          ⚠️ Migratsiya kerak. Yetishmayotgan jadvallar: {health.tables.missing.join(', ')}
+        </div>
+      )}
+
       <header className="bg-indigo-600 text-white px-4 py-3 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <h1 className="text-base font-bold shrink-0">TopSMM Dashboard</h1>
