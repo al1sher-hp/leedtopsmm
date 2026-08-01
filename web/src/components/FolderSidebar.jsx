@@ -10,6 +10,8 @@ export default function FolderSidebar({
   onSelect,
   onDelete,
   loading,
+  error,
+  onRetry,
   emptyText = "Hozircha hech narsa yo'q.",
   allOption,
   deleteWarning,
@@ -38,7 +40,17 @@ export default function FolderSidebar({
       )}
 
       {loading && <div className="text-xs text-gray-400 px-2 py-2">yuklanmoqda...</div>}
-      {!loading && items.length === 0 && <div className="text-xs text-gray-400 px-2 py-2">{emptyText}</div>}
+      {!loading && error && (
+        <div className="px-2 py-2 flex flex-col gap-1">
+          <div className="text-xs text-red-600">⚠️ {error}</div>
+          {onRetry && (
+            <button onClick={onRetry} className="text-xs text-red-700 underline hover:text-red-900 self-start">
+              Qayta urinish
+            </button>
+          )}
+        </div>
+      )}
+      {!loading && !error && items.length === 0 && <div className="text-xs text-gray-400 px-2 py-2">{emptyText}</div>}
 
       <div className="flex flex-col gap-1 max-h-[70vh] overflow-y-auto">
         {items.map((item) => (

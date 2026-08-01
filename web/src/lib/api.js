@@ -28,6 +28,14 @@ async function request(path, options = {}, baseUrl = API_URL) {
   return res.json();
 }
 
+// /health muvaffaqiyatsiz (503) bo'lganda ham javob tanasi (qaysi jadval
+// yetishayotgani) kerak bo'lgani uchun umumiy `request()` ishlatilmaydi —
+// u status kod 2xx bo'lmasa xato tashlaydi va tanani o'qimay qo'yardi.
+export async function fetchHealth() {
+  const res = await fetch(`${API_URL}/health`);
+  return res.json();
+}
+
 export function fetchLeads(params) {
   const query = new URLSearchParams(cleanParams(params)).toString();
   return request(`/api/leads?${query}`);

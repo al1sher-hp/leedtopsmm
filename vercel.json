@@ -5,6 +5,7 @@
   "outputDirectory": "web/dist",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/health", "destination": "/api" },
+    { "source": "/((?!api/|health$).*)", "destination": "/index.html" }
   ]
 }
