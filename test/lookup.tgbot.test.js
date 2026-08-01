@@ -58,7 +58,10 @@ describe('src/lookup/providers/tgbot.js manbasi', () => {
     // Izoh qatorlarini (`//...`) olib tashlab, faqat HAQIQIY koddagi
     // ishlatilishini tekshiramiz — izohlarda "getPool()" so'zi (nima
     // uchun ishlatilmasligini tushuntirish uchun) bemalol uchrashi mumkin.
+    // \r\n'ni oldindan normallashtiramiz — aks holda Windows'da (CRLF)
+    // `$` chiziqning oxiridagi \r'dan oldin to'xtab, izoh olib tashlanmay qoladi.
     const codeOnly = source
+      .replace(/\r\n/g, '\n')
       .split('\n')
       .map((line) => line.replace(/\/\/.*$/, ''))
       .join('\n');
