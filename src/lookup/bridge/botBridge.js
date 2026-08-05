@@ -29,14 +29,17 @@ export class LookupTimeoutError extends LookupBridgeError {
   }
 }
 
-// Bot javobida "obuna bo'ling"/"limit tugadi"/"topilmadi" borligini
-// aniqlaydigan kalit so'zlar — uz+ru, keng qamrovli bo'lishi uchun ataylab
-// bo'sh emas naqshlar.
-const SUBSCRIPTION_RE = /(obuna\s*bo['’]?ling|обязательн\w*\s*подпи|подпиш[а-я]*тесь|join\s*(the\s*)?channel)/i;
-const QUOTA_RE = /(kunlik\s*limit|limit\s*tugad|лимит\s*исчерп|баланс\s*(законч|исчерп)|balans\s*tugad)/i;
+// Bot javobida "obuna bo’ling"/"limit tugadi"/"topilmadi" borligini
+// aniqlaydigan kalit so’zlar — uz+ru, keng qamrovli bo’lishi uchun ataylab
+// bo’sh emas naqshlar.
+const SUBSCRIPTION_RE = /(obuna\s*bo[‘’]?ling|обязательн\w*\s*подпи|подпиш[а-я]*тесь|join\s*(the\s*)?channel)/i;
+// Balans yetarli emas — "текущий баланс: $0.02" yoki "Выбери тариф" (kredit to’ldirish ekrani)
+const QUOTA_RE = /(kunlik\s*limit|limit\s*tugad|лимит\s*исчерп|баланс\s*(законч|исчерп)|balans\s*tugad|текущий\s*баланс[\s\S]{0,40}\$|выбери\s*тариф|пополнить\s*баланс)/i;
 const NOT_FOUND_RE = /(topilmadi|не\s*найден[а-я]*|hech\s*narsa\s*topilmadi|ничего\s*не\s*найдено)/i;
-const JOIN_BUTTON_RE = /(obuna|a['’]?zo\s*bo['’]?l|подпис|join)/i;
+const JOIN_BUTTON_RE = /(obuna|a[‘’]?zo\s*bo[‘’]?l|подпис|join)/i;
 const MENU_BUTTON_RE = /(qidir|search|topish|raqam\s*qidir|поиск|номер)/i;
+// Platforma tanlash menyusi — bot usernameni olgach Instagram/TikTok/Telegram ni so’raydi
+const PLATFORM_SELECT_RE = /выберите\s*направление|yo[‘’]nalish\s*tanla/i;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -62,6 +65,15 @@ function hasJoinButton(message) {
 function findMenuButton(message) {
   return inlineButtons(message).find(
     (b) => b.className === 'KeyboardButtonCallback' && MENU_BUTTON_RE.test(b.text || '')
+  );
+}
+
+// @Telefon_raqam_topishbot platforma menyusidagi "Telegram" tugmasini topadi.
+// Tugma matni aniq "Telegram" (boshqa so'zsiz) bo'lishi kerak — "TikTok"
+// yoki "Instagram" bilan aralashmaslik uchun.
+function findPlatformTelegramButton(message) {
+  return inlineButtons(message).find(
+    (b) => /^telegram$/i.test((b.text || '').trim())
   );
 }
 
@@ -119,6 +131,11 @@ function classifyMessage(message) {
   if (NOT_FOUND_RE.test(text)) {
     return { kind: 'not_found', text };
   }
+  // Platforma tanlash menyusi — "Telegram" tugmasi bor yoki "Выберите направление" matni
+  const tgBtn = findPlatformTelegramButton(message);
+  if (PLATFORM_SELECT_RE.test(text) || tgBtn) {
+    return { kind: 'platform_menu', text, tgBtn: tgBtn || null, msgId: message.id };
+  }
   return { kind: 'unknown', text };
 }
 
@@ -133,7 +150,12 @@ function classifyMessage(message) {
 // holda bot juda tez javob bersa (sendText() qaytishi bilan bir vaqtda),
 // hali ro'yxatdan o'tmagan handler javobni o'tkazib yuboradi va bekorga
 // timeout bo'ladi.
-function listenForBotReply(client, user, { timeoutMs, isFinal, maxIntermediates }) {
+//
+// `inputPeer` — platforma tanlash menyusida "Telegram" tugmasini bosish
+// uchun kerak. Bot username yuborilgandan so'ng "Выберите направление"
+// menyusini yuboradi; tinglovchi tugmani bosgandan keyin haqiqiy natijani
+// kutishda davom etadi (resolve QILINMAYDI).
+function listenForBotReply(client, user, inputPeer, { timeoutMs, isFinal, maxIntermediates }) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let intermediateCount = 0;
@@ -177,6 +199,27 @@ function listenForBotReply(client, user, { timeoutMs, isFinal, maxIntermediates 
         return finish({ text: classified.text, raw: message, code: 'LOOKUP_NOT_FOUND' });
       }
 
+      // @Telefon_raqam_topishbot platforma menyusi — "Telegram" tugmasi bosiladi,
+      // so'ng haqiqiy natija kutilishda DAVOM ETILADI (resolve QILINMAYDI).
+      // Bu bot username yuborilgandan so'ng darhol "Выберите направление"
+      // menyusini yuboradi; shundan keyingina haqiqiy natija keladi.
+      if (classified.kind === 'platform_menu') {
+        if (classified.tgBtn && inputPeer) {
+          client
+            .invoke(
+              new Api.messages.GetBotCallbackAnswer({
+                peer: inputPeer,
+                msgId: classified.msgId,
+                data: classified.tgBtn.data,
+              })
+            )
+            .catch((err) =>
+              console.warn('[botBridge] Telegram tugmasini bosib bo\'lmadi:', err.message)
+            );
+        }
+        return; // Davom etamiz — keyingi xabar haqiqiy natija bo'ladi
+      }
+
       if (isFinal(classified.text)) {
         return finish({ text: classified.text, raw: message });
       }
@@ -204,7 +247,7 @@ async function performAsk(client, botUsername, query, opts) {
     // Dialog yo'q — avval /start yuboriladi. Tinglovchi SendMessage'dan
     // OLDIN ulanadi (race condition oldini olish uchun), keyin FAQAT shu
     // /start javobidan menyu tugmasini qidiramiz.
-    const startWaiter = listenForBotReply(client, user, {
+    const startWaiter = listenForBotReply(client, user, inputPeer, {
       timeoutMs: opts.timeoutMs,
       isFinal: () => true,
       maxIntermediates: 1,
@@ -219,7 +262,7 @@ async function performAsk(client, botUsername, query, opts) {
   // qayta ishga tushirib yuborishi mumkin. Menyu tugmasi FAQAT yangi
   // dialog ochilib, /start'ning O'ZIGA javob kelganda bosiladi.
 
-  const waiter = listenForBotReply(client, user, {
+  const waiter = listenForBotReply(client, user, inputPeer, {
     timeoutMs: opts.timeoutMs,
     isFinal: opts.isFinal,
     maxIntermediates: opts.maxIntermediates,
