@@ -9,6 +9,7 @@ import outreachRoutes from './outreachRoutes.js';
 import folderRoutes from './folderRoutes.js';
 import dialogRoutes from './dialogRoutes.js';
 import lookupRoutes from './lookupRoutes.js';
+import groupLeadsRoutes from './groupLeadsRoutes.js';
 import { startMonitor } from '../outreach/inboxMonitor.js';
 import { purgeExpired } from '../lookup/cache.js';
 import { checkHealth } from '../db/health.js';
@@ -27,6 +28,7 @@ app.use('/api/outreach', outreachRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/dialogs', dialogRoutes);
 app.use('/api/lookup', lookupRoutes);
+app.use('/api', groupLeadsRoutes);
 app.use('/api', routes);
 
 // Inbox monitorini server.js (doim ishlaydigan) ichida ishga tushirish —

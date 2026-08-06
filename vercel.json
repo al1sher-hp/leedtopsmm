@@ -7,5 +7,11 @@
     { "source": "/api/:path*", "destination": "/api" },
     { "source": "/health", "destination": "/api" },
     { "source": "/((?!api/|health$).*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/index.js": { "maxDuration": 300 }
+  },
+  "crons": [
+    { "path": "/api/group-leads/sync", "schedule": "0 3 * * *" }
   ]
 }

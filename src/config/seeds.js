@@ -46,4 +46,10 @@ export const PREMIUM_KEYWORDS = [
   'premium olmoqchi', 'premium kerak', 'premium qancha',
 ];
 
-export default { SEARCH_KEYWORDS, CATALOG_CHANNELS, UZ_OPERATOR_CODES, PREMIUM_KEYWORDS };
+// "Guruh lead'lar" moduli uchun ixtiyoriy kalit so'z filtri — bo'sh
+// qoldirilsa (standart holat) telefon topilgan HAR BIR xabar/komment
+// yig'iladi (filtrsiz). To'ldirilsa, faqat shu so'zlardan birini o'z ichiga
+// olgan xabarlar ko'rib chiqiladi (qarang: src/lib/ingest.js).
+export const GROUP_LEAD_KEYWORDS = [];
+
+export default { SEARCH_KEYWORDS, CATALOG_CHANNELS, UZ_OPERATOR_CODES, PREMIUM_KEYWORDS, GROUP_LEAD_KEYWORDS };
